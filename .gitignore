@@ -1,0 +1,68 @@
+# ===== Root Monorepo .gitignore =====
+
+# ----- Dependencies -----
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# ----- Next.js -----
+.next/
+out/
+
+# ----- Build & Production -----
+build/
+dist/
+
+# ----- Environment & Secrets -----
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.p8
+*.p12
+
+# ----- Prisma Generated -----
+src/generated/prisma
+
+# ----- IDE & OS -----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ----- Debug Logs -----
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ----- TypeScript -----
+*.tsbuildinfo
+next-env.d.ts
+
+# ----- Vercel -----
+.vercel
+
+# ----- Testing -----
+coverage/
+
+# ----- Flutter / Dart -----
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+
+# ----- Misc -----
+*.log
+.planning/

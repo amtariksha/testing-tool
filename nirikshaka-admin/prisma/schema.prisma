@@ -1,0 +1,338 @@
+// This is your Prisma schema file for Nirikshaka Admin
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── USER & AUTH ────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  role      UserRole @default(DEVELOPER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  teams        TeamMember[]
+  ownedTeams   Team[]       @relation("TeamOwner")
+
+  @@map("users")
+}
+
+enum UserRole {
+  SUPERADMIN
+  OWNER
+  ADMIN
+  DEVELOPER
+  VIEWER
+}
+
+// ─── TEAM ────────────────────────────────────────────────────
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownerId String
+  owner   User   @relation("TeamOwner", fields: [ownerId], references: [id])
+
+  members       TeamMember[]
+  projects      Project[]
+
+  @@map("teams")
+}
+
+// ─── TEAM MEMBERS ────────────────────────────────────────────
+
+model TeamMember {
+  id       String         @id @default(cuid())
+  role     TeamMemberRole @default(DEVELOPER)
+  joinedAt DateTime       @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, teamId])
+  @@map("team_members")
+}
+
+enum TeamMemberRole {
+  OWNER
+  ADMIN
+  DEVELOPER
+  VIEWER
+}
+
+// ─── PROJECT ─────────────────────────────────────────────────
+
+model Project {
+  id          String      @id @default(cuid())
+  name        String
+  packageName String
+  platform    Platform
+  environment Environment @default(PRODUCTION)
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  // Nirikshaka SaaS Feature Flags (ON/OFF toggles)
+  enableCrashReporting       Boolean @default(true)
+  enableNetworkTracking       Boolean @default(true)
+  enableUIErrorTracking       Boolean @default(true)
+  enableBreadcrumbs           Boolean @default(true)
+  enableLifecycleTracking     Boolean @default(true)
+  enableJourneyTracking       Boolean @default(true)
+  enableScreenshotDetection   Boolean @default(true)
+
+  // SaaS Usage limits
+  monthlyEventLimit           Int     @default(100000)
+  monthlyEventCount           Int     @default(0)
+  isSuspended                 Boolean @default(false)
+
+  apiKeys      APIKey[]
+  apiRequests  APIRequest[]
+  crashLogs    CrashLog[]
+  uiErrors     UIError[]
+  sdkInstalls  SDKInstallation[]
+  userJourneys UserJourney[]
+
+  @@map("projects")
+}
+
+enum Platform {
+  WEB
+  ANDROID
+  IOS
+  FLUTTER
+  REACT_NATIVE
+}
+
+enum Environment {
+  PRODUCTION
+  STAGING
+  DEVELOPMENT
+}
+
+enum ProjectStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+// ─── API KEY ─────────────────────────────────────────────────
+
+model APIKey {
+  id        String      @id @default(cuid())
+  name      String
+  key       String      @unique
+  status    APIKeyStatus @default(ACTIVE)
+  createdAt DateTime    @default(now())
+  lastUsed  DateTime?
+  revokedAt DateTime?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  apiRequests APIRequest[]
+
+  @@map("api_keys")
+}
+
+enum APIKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+// ─── API REQUEST ─────────────────────────────────────────────
+
+model APIRequest {
+  id           String   @id @default(cuid())
+  method       String
+  path         String
+  status       Int
+  duration     Int      // milliseconds
+  requestSize  Int      // bytes
+  responseSize Int      // bytes
+  ip           String
+  userAgent    String?
+  headers      Json
+  requestBody  String?
+  responseBody String?
+  timestamp    DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  apiKeyId String?
+  apiKey   APIKey? @relation(fields: [apiKeyId], references: [id])
+
+  @@index([projectId, timestamp])
+  @@index([status])
+  @@map("api_requests")
+}
+
+// ─── CRASH LOG ───────────────────────────────────────────────
+
+model CrashLog {
+  id         String       @id @default(cuid())
+  title      String
+  message    String
+  stackTrace String       @db.Text
+  severity   Severity
+  platform   String
+  version    String
+  device     String?
+  os         String?
+  osVersion  String?
+  userId     String?
+  sessionId  String
+  count            Int          @default(1)
+  resolved         Boolean      @default(false)
+  resolvedAt       DateTime?
+  screenshotUrl    String?
+  stepsToReproduce Json?
+  timestamp        DateTime     @db.Timestamp @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+  @@index([severity, resolved])
+  @@map("crash_logs")
+}
+
+enum Severity {
+  CRITICAL
+  ERROR
+  WARNING
+  INFO
+}
+
+// ─── UI ERROR ────────────────────────────────────────────────
+
+model UIError {
+  id             String      @id @default(cuid())
+  type           UIErrorType
+  component      String
+  message        String
+  url            String
+  browser        String?
+  browserVersion String?
+  os             String?
+  count            Int         @default(1)
+  resolved         Boolean     @default(false)
+  screenshotUrl    String?
+  stepsToReproduce Json?
+  timestamp        DateTime    @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
+  @@map("ui_errors")
+}
+
+enum UIErrorType {
+  COMPONENT_CRASH
+  BUTTON_FAILURE
+  RUNTIME_ERROR
+  RENDER_ERROR
+}
+
+// ─── SDK INSTALLATION ────────────────────────────────────────
+
+model SDKInstallation {
+  id          String   @id @default(cuid())
+  platform    Platform
+  sdkVersion  String
+  appVersion  String
+  deviceId    String?
+  installDate DateTime @default(now())
+  lastSeen    DateTime @default(now())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, platform])
+  @@map("sdk_installations")
+}
+
+// ─── USER JOURNEY ────────────────────────────────────────
+
+model UserJourney {
+  id           String   @id @default(cuid())
+  sessionId    String   @unique
+  deviceId     String
+  appUserId    String?              // Optional: real user ID from client app
+  userName     String?              // User's display name
+  userEmail    String?              // User's email address
+  userMobile   String?              // User's mobile number
+  uniqueId     String?              // Unique identity value (Email/Mobile/Customer ID)
+  platform     String
+  appVersion   String
+  os           String?
+  osVersion    String?
+  startedAt    DateTime @default(now())
+  endedAt      DateTime?
+  duration     Int?                 // Total session duration in seconds
+  screenCount  Int      @default(0) // Number of unique screens visited
+  eventCount   Int      @default(0) // Total events in this journey
+  summary      String?  @db.Text    // AI-generated summary
+  suggestions  Json?                // AI-generated UX suggestions
+
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  events       JourneyEvent[]
+
+  @@index([projectId, startedAt])
+  @@index([deviceId])
+  @@index([appUserId])
+  @@index([userEmail])
+  @@index([uniqueId])
+  @@map("user_journeys")
+}
+
+// ─── JOURNEY EVENT ───────────────────────────────────────
+
+model JourneyEvent {
+  id          String   @id @default(cuid())
+  type        String               // screen_view, button_tap, scroll, api_call, app_lifecycle, custom
+  name        String               // Screen name, button label, etc.
+  data        Json?                // Extra metadata (URL, params, etc.)
+  timestamp   DateTime @default(now())
+  duration    Int?                 // Time spent on this event (ms)
+
+  journeyId   String
+  journey     UserJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+
+  @@index([journeyId, timestamp])
+  @@map("journey_events")
+}
+
+// ─── SYSTEM CONFIG ───────────────────────────────────────────
+
+model SystemConfig {
+  key   String @id
+  value String @db.Text
+
+  @@map("system_configs")
+}
+

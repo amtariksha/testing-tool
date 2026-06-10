@@ -1,0 +1,27 @@
+name: nirikshaka
+description: "Nirikshaka Flutter SDK — Init once, track everything. Auto-capture crashes, UI errors, API requests, and user journeys with AI-powered analysis."
+version: 2.1.0
+homepage: https://nirikshaka.io
+repository: https://github.com/nirikshaka/nirikshaka-flutter
+issue_tracker: https://github.com/nirikshaka/nirikshaka-flutter/issues
+
+environment:
+  sdk: ^3.0.0
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.4.0
+  pretty_dio_logger: ^1.4.0
+  device_info_plus: ^12.1.0
+  screenshot_callback: ^3.0.1
+  permission_handler: ^12.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  # No special flutter config needed for this package
