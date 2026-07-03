@@ -1,0 +1,39 @@
+{
+  "name": "nirikshaka-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nirikshaka agent + test-execution worker (Scout, Strategist, Author, Runner, Critic, Analyst)",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/src/index.js",
+    "generate": "prisma generate",
+    "sync:schema": "cp ../nirikshaka/prisma/schema.prisma prisma/schema.prisma && prisma generate",
+    "migrate": "cd ../nirikshaka && npx prisma migrate deploy",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "backfill:encrypt": "tsx scripts/backfill-encrypt.ts",
+    "gate:0": "tsx scripts/gate0.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@supabase/supabase-js": "^2.106.0",
+    "dotenv": "^16.4.5",
+    "pg": "^8.21.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.20.0",
+    "prisma": "^7.8.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}

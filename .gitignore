@@ -66,3 +66,7 @@ pubspec.lock
 # ----- Misc -----
 *.log
 .planning/
+
+# keep env documentation
+!.env.example
+!**/.env.example

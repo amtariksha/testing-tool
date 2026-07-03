@@ -1,0 +1,20 @@
+[Unit]
+Description=Nirikshaka agent worker (task claimer + agents)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pradeep
+WorkingDirectory=/mnt/work/projects/testing-tool/nirikshaka-worker
+EnvironmentFile=/mnt/work/projects/testing-tool/nirikshaka-worker/.env
+ExecStart=/usr/bin/env node dist/src/index.js
+Restart=always
+RestartSec=5
+# Give the claim loop time to finish the in-flight task on stop
+TimeoutStopSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

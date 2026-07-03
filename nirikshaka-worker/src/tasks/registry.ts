@@ -1,0 +1,34 @@
+import type { PrismaClient, AgentTask } from "@prisma/client";
+import type { WorkerConfig } from "../config";
+import type { RealtimePublisher } from "../realtime";
+
+export interface TaskContext {
+  prisma: PrismaClient;
+  config: WorkerConfig;
+  realtime: RealtimePublisher;
+}
+
+export type TaskResult = Record<string, unknown>;
+
+export type TaskHandler = (task: AgentTask, ctx: TaskContext) => Promise<TaskResult>;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Task type → handler. Phase 0 ships only `noop` (Gate 0 plumbing check);
+ * agent handlers (mine_telemetry, execute_run, ...) land in Phases 1–4.
+ */
+export const registry: Record<string, TaskHandler> = {
+  noop: async (task) => {
+    const payload = (task.payload ?? {}) as { delayMs?: number };
+    const delayMs = typeof payload.delayMs === "number" ? payload.delayMs : 100;
+    await sleep(Math.min(delayMs, 10_000));
+    return { ok: true, echo: task.payload };
+  },
+};
+
+export function claimableTypes(): string[] {
+  return Object.keys(registry);
+}

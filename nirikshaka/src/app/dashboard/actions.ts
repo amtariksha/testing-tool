@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import crypto from "crypto";
 import { getUser } from "@/app/auth/actions";
+import { tryDecryptString } from "@/lib/crypto/envelope";
 
 // Resolves the logged-in user and returns their company (team).
 // Creates the user and a default team if they don't exist yet.
@@ -180,15 +181,22 @@ export async function getApiRequests(projectId?: string, limit: number = 100) {
     });
     const projectIds = teamProjects.map(p => p.id);
 
-    const finalWhere = projectId 
+    const finalWhere = projectId
       ? { projectId: projectId, project: { teamId: team.id } }
       : { projectId: { in: projectIds } };
 
-    return await prisma.aPIRequest.findMany({
+    const requests = await prisma.aPIRequest.findMany({
       where: finalWhere,
       orderBy: { timestamp: 'desc' },
       take: limit
     });
+
+    // Bodies are envelope-encrypted at rest; legacy plaintext passes through
+    return requests.map((request) => ({
+      ...request,
+      requestBody: tryDecryptString(request.requestBody, request.projectId),
+      responseBody: tryDecryptString(request.responseBody, request.projectId),
+    }));
   } catch (error) {
     return [];
   }

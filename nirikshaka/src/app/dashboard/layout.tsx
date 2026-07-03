@@ -1,4 +1,5 @@
 import { DashboardLayout } from "@/components/layout/dashboard-layout";
+import { AgentEventLogger } from "@/components/agent-event-logger";
 import { getUser } from "@/app/auth/actions";
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
@@ -9,5 +10,10 @@ export default async function Layout({ children }: { children: React.ReactNode }
     email: user.email || "",
   } : null;
 
-  return <DashboardLayout user={userInfo}>{children}</DashboardLayout>;
+  return (
+    <DashboardLayout user={userInfo}>
+      <AgentEventLogger />
+      {children}
+    </DashboardLayout>
+  );
 }

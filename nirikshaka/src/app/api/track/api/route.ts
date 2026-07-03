@@ -1,6 +1,40 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { emitRealtimeEvent } from "@/lib/event-bus";
+import { encryptString, isEncryptionConfigured } from "@/lib/crypto/envelope";
+
+let warnedNoMasterKey = false;
+let warnedBadMasterKey = false;
+
+// Encryption is best-effort defense-in-depth: a missing or malformed master
+// key must never drop telemetry, so this fails open to plaintext (loudly —
+// and gate:0's encryption check catches it).
+function encryptBody(value: unknown, projectId: string): string | undefined {
+  if (typeof value !== "string" || value === "") {
+    return value as string | undefined;
+  }
+  if (!isEncryptionConfigured()) {
+    if (!warnedNoMasterKey) {
+      warnedNoMasterKey = true;
+      console.warn(
+        "[track/api] NIRIKSHAKA_MASTER_KEY not set — storing bodies as plaintext"
+      );
+    }
+    return value;
+  }
+  try {
+    return encryptString(value, projectId);
+  } catch (error) {
+    if (!warnedBadMasterKey) {
+      warnedBadMasterKey = true;
+      console.error(
+        "[track/api] encryption failed — storing bodies as plaintext. Check NIRIKSHAKA_MASTER_KEY:",
+        error instanceof Error ? error.message : error
+      );
+    }
+    return value;
+  }
+}
 
 export async function OPTIONS() {
   return NextResponse.json({}, {
@@ -53,8 +87,8 @@ export async function POST(req: Request) {
         timestamp: new Date(),
         projectId: project.id,
         headers: body.headers || {},
-        requestBody: body.requestBody,
-        responseBody: body.responseBody,
+        requestBody: encryptBody(body.requestBody, project.id),
+        responseBody: encryptBody(body.responseBody, project.id),
       },
     });
 
@@ -64,11 +98,16 @@ export async function POST(req: Request) {
       data: { monthlyEventCount: { increment: 1 } },
     });
 
-    // Broadcast to live dashboard
+    // Broadcast to live dashboard — plaintext bodies for the live view;
+    // only the at-rest copy is encrypted
     emitRealtimeEvent({
       type: "api_request",
       projectId: project.id,
-      data: requestLog,
+      data: {
+        ...requestLog,
+        requestBody: body.requestBody,
+        responseBody: body.responseBody,
+      },
       timestamp: new Date().toISOString(),
     });
 
