@@ -23,6 +23,7 @@ import {
   X,
   LogOut,
   Footprints,
+  ScanSearch,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -32,6 +33,12 @@ const navItems = [
     items: [
       { label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
       { label: "Projects", icon: FolderOpen, href: "/dashboard/projects" },
+    ],
+  },
+  {
+    section: "Intelligence",
+    items: [
+      { label: "App Model", icon: ScanSearch, href: "/dashboard/app-model" },
     ],
   },
   {
