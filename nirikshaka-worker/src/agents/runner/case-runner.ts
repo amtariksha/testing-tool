@@ -131,22 +131,26 @@ export async function runCase(
     } catch (error: unknown) {
       const failure = error instanceof Error ? error.message : String(error);
 
-      // LLM recovery — only for locator-bearing steps, within budget.
+      // LLM recovery (doc §5.3) — locator-bearing steps only, within budget.
+      // Bounded rounds: a failed proposal is fed back via priorAttempts; the
+      // recovery module's own 3-call cap bounds total spend per step.
       if (deps.recover && target && (deps.canSpendLlm?.() ?? true)) {
         const priorAttempts: ResolvedSelector[] = [];
-        const result = await deps.recover({
-          page,
-          step: substituted,
-          stepIndex: index,
-          target,
-          failure,
-          priorAttempts,
-        });
-        llmCalls += result.llmCalls;
-        llmCostUsd += result.costUsd;
-        attempts += result.llmCalls;
+        let lastFailure = failure;
+        while ((deps.canSpendLlm?.() ?? true) && priorAttempts.length < 3) {
+          const result = await deps.recover({
+            page,
+            step: substituted,
+            stepIndex: index,
+            target,
+            failure: lastFailure,
+            priorAttempts,
+          });
+          llmCalls += result.llmCalls;
+          llmCostUsd += result.costUsd;
+          attempts += Math.max(result.llmCalls, 1);
+          if (!result.selector) break;
 
-        if (result.selector) {
           try {
             await executeStep(ctx, substituted, index, locatorFor(page, result.selector));
             usedFastPath = false;
@@ -170,18 +174,9 @@ export async function runCase(
             });
             return;
           } catch (retryError: unknown) {
-            const retryFailure =
+            lastFailure =
               retryError instanceof Error ? retryError.message : String(retryError);
-            stepLog.push({
-              index,
-              action: step.action,
-              target: describeTarget(target),
-              status: "failed",
-              durationMs: Date.now() - begun,
-              attempts,
-              note: `recovery selector also failed: ${retryFailure.slice(0, 200)}`,
-            });
-            throw new StepFailedError(retryFailure, index, step.action);
+            priorAttempts.push(result.selector);
           }
         }
       }
