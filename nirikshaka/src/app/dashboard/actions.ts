@@ -544,3 +544,27 @@ export async function saveProjectWebhookSettings(
 
 
 
+// ── Worker health (DEVELOPER-MANUAL §8 gap 2) ─────────────────────────────
+
+export interface WorkerHealth {
+  state: "up" | "down" | "unknown";
+  agentStatus: string | null;
+  lastBeatAt: Date | null;
+}
+
+// Stale threshold = 3× the worker's HEARTBEAT_INTERVAL_MS (10s default).
+const WORKER_STALE_MS = 30_000;
+
+export async function getWorkerHealth(): Promise<WorkerHealth> {
+  await resolveUserCompany(); // any logged-in team member may see this
+  const beat = await prisma.agentHeartbeat.findUnique({ where: { agent: "worker" } });
+  if (!beat) {
+    return { state: "unknown", agentStatus: null, lastBeatAt: null };
+  }
+  const stale = Date.now() - beat.lastBeatAt.getTime() > WORKER_STALE_MS;
+  return {
+    state: stale || beat.status === "stopped" ? "down" : "up",
+    agentStatus: beat.status,
+    lastBeatAt: beat.lastBeatAt,
+  };
+}

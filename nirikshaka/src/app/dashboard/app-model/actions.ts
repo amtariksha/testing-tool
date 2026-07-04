@@ -88,6 +88,60 @@ export async function rejectAppModel(appModelId: string) {
   return { ok: true };
 }
 
+export interface ScoutTaskInfo {
+  id: string;
+  type: string;
+  status: string;
+  error: string | null;
+  iteration: number;
+  createdAt: Date;
+  finishedAt: Date | null;
+}
+
+/**
+ * The Scout→Critic pipeline state for a project: recent fuse_model /
+ * review_model tasks, newest first. Polled by the Confirmation Gate so
+ * progress (and critic-loop re-enqueues) survive page reloads. `error` is
+ * safe to surface here — this path is team-scoped, unlike the ids-only
+ * realtime channel.
+ */
+export async function getScoutPipeline(projectId: string): Promise<{
+  tasks: ScoutTaskInfo[];
+  active: boolean;
+}> {
+  await assertProjectInTeam(projectId);
+  const rows = await prisma.agentTask.findMany({
+    where: { projectId, type: { in: ["fuse_model", "review_model"] } },
+    orderBy: { createdAt: "desc" },
+    take: 6,
+    select: {
+      id: true,
+      type: true,
+      status: true,
+      error: true,
+      payload: true,
+      createdAt: true,
+      finishedAt: true,
+    },
+  });
+  const tasks = rows.map((row) => {
+    const payload = (row.payload ?? {}) as { iteration?: number };
+    return {
+      id: row.id,
+      type: row.type,
+      status: row.status,
+      error: row.error,
+      iteration: typeof payload.iteration === "number" ? payload.iteration : 1,
+      createdAt: row.createdAt,
+      finishedAt: row.finishedAt,
+    };
+  });
+  return {
+    tasks,
+    active: tasks.some((t) => t.status === "queued" || t.status === "claimed"),
+  };
+}
+
 interface ScoutSourceInput {
   type: (typeof ALLOWED_SCOUT_SOURCES)[number];
   content: string;

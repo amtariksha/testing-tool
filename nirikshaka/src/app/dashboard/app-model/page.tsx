@@ -10,7 +10,9 @@ import {
   runScout,
 } from "./actions";
 import type { LoadedModel, PilotProject } from "./types";
+import { useScoutPipeline } from "./use-scout-pipeline";
 import { StatusHeader } from "./components/status-header";
+import { TaskProgressChip } from "./components/task-progress-chip";
 import { CritiquePanel } from "./components/critique-panel";
 import { DiscrepancyInbox } from "./components/discrepancy-inbox";
 import { FeatureCard } from "./components/feature-card";
@@ -50,6 +52,13 @@ export default function AppModelPage() {
     if (projectId) load(projectId);
   }, [projectId, load]);
 
+  // Pipeline poller: reload the model + toast when the queue settles (gap 1).
+  const onPipelineSettled = useCallback(() => {
+    void load(projectId);
+    toast.info("Agent pipeline finished — model refreshed");
+  }, [load, projectId]);
+  const pipeline = useScoutPipeline(projectId, onPipelineSettled);
+
   /** Shared busy/toast/reload wrapper for every mutating action. */
   const onMutate = useCallback(
     async (fn: () => Promise<unknown>, successMessage?: string) => {
@@ -75,9 +84,10 @@ export default function AppModelPage() {
         { type: "prd", content: prd },
         { type: "openapi", content: openapi },
       ]);
-      toast.success(`Scout enqueued (task ${res.taskId.slice(0, 8)}…) — refresh in ~30s`);
+      toast.success(`Scout enqueued (task ${res.taskId.slice(0, 8)}…)`);
       setPrd("");
       setOpenapi("");
+      pipeline.notifyEnqueued();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to enqueue Scout");
     } finally {
@@ -117,6 +127,11 @@ export default function AppModelPage() {
       {loading && <p className="text-muted-foreground text-sm">Loading…</p>}
 
       {!loading && !loaded && (
+        <div className="space-y-3">
+          <TaskProgressChip tasks={pipeline.tasks} />
+        </div>
+      )}
+      {!loading && !loaded && (
         <RunScoutPanel
           prd={prd}
           openapi={openapi}
@@ -144,7 +159,9 @@ export default function AppModelPage() {
             onReject={() =>
               onMutate(() => rejectAppModel(loaded.appModel.id), "Sent back to DRAFT for re-mining")
             }
-          />
+          >
+            <TaskProgressChip tasks={pipeline.tasks} />
+          </StatusHeader>
 
           {loaded.critique && <CritiquePanel critique={loaded.critique} />}
 

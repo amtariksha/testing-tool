@@ -2,6 +2,7 @@
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { MobileSidebar } from "@/components/layout/sidebar";
+import { WorkerHealthBadge } from "@/components/worker-health-badge";
 import { Bell, Search, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
@@ -62,6 +63,9 @@ export function Topbar({ title, subtitle, user }: TopbarProps) {
       </div>
 
       <div className="flex items-center gap-2 ml-auto">
+        {/* Agent worker liveness */}
+        <WorkerHealthBadge />
+
         {/* Notifications */}
         <motion.button
           whileHover={{ scale: 1.05 }}
