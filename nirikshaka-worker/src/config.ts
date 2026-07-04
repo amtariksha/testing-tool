@@ -26,6 +26,11 @@ const envSchema = z.object({
   // ── MCP server (Phase 2) ──
   MCP_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
   MCP_HTTP_PORT: z.coerce.number().int().positive().default(8788),
+  // ── Strategist / Author / Critic loop (Phase 3) ──
+  AUTHOR_MAX_COST_USD: z.coerce.number().positive().default(5),
+  AUTHOR_VALIDATION_RETRIES: z.coerce.number().int().nonnegative().default(2),
+  CRITIC_TEST_MAX_ITERATIONS: z.coerce.number().int().positive().default(3),
+  REVIEW_TESTS_BATCH_SIZE: z.coerce.number().int().positive().default(10),
 });
 
 export type WorkerConfig = z.infer<typeof envSchema>;
