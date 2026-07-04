@@ -2,21 +2,15 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 import { getAgentCaller } from "@/lib/agent-auth";
 
-// Task types the worker understands (implementation doc §5.1 AgentTask).
-// `noop` exists for Gate 0 plumbing checks.
+// Task types the worker actually registers — MUST mirror
+// nirikshaka-worker/src/tasks/registry.ts (claimableTypes()); anything else
+// would queue forever. Set-equality is enforced by
+// nirikshaka-worker/src/tasks/registry.test.ts — update both together, one
+// phase at a time. `noop` exists for Gate 0 plumbing checks.
 const ALLOWED_TASK_TYPES = [
   "noop",
-  "mine_telemetry",
-  "ingest_source",
   "fuse_model",
   "review_model",
-  "plan_strategy",
-  "generate_tests",
-  "review_tests",
-  "execute_run",
-  "execute_case",
-  "review_run",
-  "analyze_run",
 ] as const;
 
 export async function POST(req: Request) {
