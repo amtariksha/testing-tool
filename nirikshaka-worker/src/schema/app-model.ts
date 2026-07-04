@@ -1,0 +1,112 @@
+import { z } from "zod";
+
+/**
+ * App model document schema (implementation doc §4.2). This is the Zod-validated
+ * shape stored in AppModel.model (Json). Every miner emits fragments that Fuse
+ * merges into one document; the Confirmation Gate renders it for human approval.
+ */
+
+export const businessRuleSchema = z.object({
+  rule: z.string(),
+  source: z.string(), // e.g. "prd:7.2", "telemetry:flow:raise-request-happy"
+  confidence: z.number().min(0).max(1),
+});
+
+export const featureSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  confidence: z.number().min(0).max(1),
+  roles: z.array(z.string()).default([]),
+  screens: z.array(z.string()).default([]),
+  apis: z.array(z.string()).default([]),
+  states: z.array(z.string()).default([]),
+  depends_on: z.array(z.string()).default([]),
+  affects: z.array(z.string()).default([]),
+  business_rules: z.array(businessRuleSchema).default([]),
+});
+
+export const screenTransitionSchema = z.object({
+  to: z.string(),
+  count: z.number().int().nonnegative(),
+});
+
+export const screenSchema = z.object({
+  id: z.string(),
+  observedNames: z.array(z.string()).default([]),
+  avgDurationMs: z.number().nonnegative().nullable().default(null),
+  topTransitions: z.array(screenTransitionSchema).default([]),
+});
+
+export const flowSchema = z.object({
+  id: z.string(),
+  featureId: z.string().nullable().default(null),
+  steps: z.array(z.string()),
+  support: z.number().int().nonnegative(),
+  confidence: z.number().min(0).max(1),
+  source: z.string(), // "telemetry" | "spec" | ...
+});
+
+export const apiChainSchema = z.object({
+  chain: z.array(z.string()),
+  support: z.number().int().nonnegative(),
+});
+
+export const roleSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export const entitySchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  fields: z.array(z.string()).default([]),
+});
+
+export const coverageBoundariesSchema = z.object({
+  agent_can_test: z.array(z.string()).default([]),
+  needs_human: z.array(z.string()).default([]),
+});
+
+export const appModelSchema = z.object({
+  features: z.array(featureSchema).default([]),
+  screens: z.array(screenSchema).default([]),
+  flows: z.array(flowSchema).default([]),
+  apiChains: z.array(apiChainSchema).default([]),
+  roles: z.array(roleSchema).default([]),
+  entities: z.array(entitySchema).default([]),
+  coverage_boundaries: coverageBoundariesSchema.default({
+    agent_can_test: [],
+    needs_human: [],
+  }),
+});
+
+export type AppModelDoc = z.infer<typeof appModelSchema>;
+export type Feature = z.infer<typeof featureSchema>;
+export type Screen = z.infer<typeof screenSchema>;
+export type Flow = z.infer<typeof flowSchema>;
+export type ApiChain = z.infer<typeof apiChainSchema>;
+
+/**
+ * Evidence index: maps a claim id to the sources that support it
+ * (AppModel.evidence Json). A claim id is a stable string like
+ * "feature:maintenance-request" or "flow:raise-request-happy".
+ */
+export const evidenceRefSchema = z.object({
+  source: z.string(), // "telemetry" | "prd" | "openapi" | "figma" | "human"
+  ref: z.string(), // pointer: journey id, "prd:7.2", endpoint, etc.
+  confidence: z.number().min(0).max(1),
+});
+export const evidenceIndexSchema = z.record(z.string(), z.array(evidenceRefSchema));
+export type EvidenceIndex = z.infer<typeof evidenceIndexSchema>;
+
+export const discrepancySchema = z.object({
+  claim: z.string(),
+  specSays: z.string(),
+  telemetrySays: z.string(),
+  resolution: z.string().optional(),
+});
+export const discrepanciesSchema = z.array(discrepancySchema);
+export type Discrepancy = z.infer<typeof discrepancySchema>;
+
+export const emptyAppModel = (): AppModelDoc => appModelSchema.parse({});
