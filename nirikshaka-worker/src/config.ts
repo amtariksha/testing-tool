@@ -15,6 +15,17 @@ const envSchema = z.object({
   POLL_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
   HEARTBEAT_INTERVAL_MS: z.coerce.number().int().positive().default(10000),
   STALE_CLAIM_SECONDS: z.coerce.number().int().positive().default(300),
+  // ── Runner (Phase 2) ──
+  RUNNER_HEADLESS: z
+    .string()
+    .default("true")
+    .transform((v) => v !== "false" && v !== "0"),
+  RUNNER_MAX_COST_USD: z.coerce.number().positive().default(1.0),
+  ARTIFACTS_DIR: z.string().default("./artifacts"),
+  SUPABASE_ARTIFACTS_BUCKET: z.string().default("test-artifacts"),
+  // ── MCP server (Phase 2) ──
+  MCP_TRANSPORT: z.enum(["stdio", "http"]).default("stdio"),
+  MCP_HTTP_PORT: z.coerce.number().int().positive().default(8788),
 });
 
 export type WorkerConfig = z.infer<typeof envSchema>;
