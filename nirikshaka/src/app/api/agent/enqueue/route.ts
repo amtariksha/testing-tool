@@ -12,6 +12,7 @@ const ALLOWED_TASK_TYPES = [
   "fuse_model",
   "review_model",
   "execute_run",
+  "review_run",
 ] as const;
 
 export async function POST(req: Request) {

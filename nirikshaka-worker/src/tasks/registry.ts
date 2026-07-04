@@ -4,6 +4,7 @@ import type { RealtimePublisher } from "../realtime";
 import type { Queryable } from "../agents/scout/types";
 import { handleFuseModel } from "../agents/scout";
 import { handleReviewModel } from "../agents/critic";
+import { handleReviewRun } from "../agents/critic/truth-check";
 import { handleExecuteRun } from "../agents/runner";
 
 export interface TaskContext {
@@ -35,6 +36,7 @@ export const registry: Record<string, TaskHandler> = {
   fuse_model: handleFuseModel,
   review_model: handleReviewModel,
   execute_run: handleExecuteRun,
+  review_run: handleReviewRun,
 };
 
 export function claimableTypes(): string[] {
