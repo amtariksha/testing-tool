@@ -13,7 +13,11 @@ import {
   resolveDiscrepancy,
   answerQuestion,
   submitAnswersAndRefuse,
+  listAppModelVersions,
+  getAppModelVersion,
+  type AppModelVersionInfo,
 } from "./actions";
+import { getWorkerHealth } from "@/app/dashboard/actions";
 import type { Feature, LoadedModel, PilotProject } from "./types";
 import { useScoutPipeline } from "./use-scout-pipeline";
 import { StatusHeader } from "./components/status-header";
@@ -36,6 +40,15 @@ export default function AppModelPage() {
   const [prd, setPrd] = useState("");
   const [openapi, setOpenapi] = useState("");
   const [editing, setEditing] = useState<Feature | null>(null);
+  const [versions, setVersions] = useState<AppModelVersionInfo[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [workerDown, setWorkerDown] = useState(false);
+
+  useEffect(() => {
+    getWorkerHealth()
+      .then((h) => setWorkerDown(h.state === "down"))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     getPilotProjects().then((p) => {
@@ -44,22 +57,39 @@ export default function AppModelPage() {
     });
   }, []);
 
-  const load = useCallback(async (pid: string) => {
-    if (!pid) return;
-    setLoading(true);
-    try {
-      const result = await getLatestAppModel(pid);
-      setLoaded(result as LoadedModel | null);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load model");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (pid: string, versionId: string | null = selectedVersionId) => {
+      if (!pid) return;
+      setLoading(true);
+      try {
+        const [result, versionList] = await Promise.all([
+          versionId ? getAppModelVersion(versionId) : getLatestAppModel(pid),
+          listAppModelVersions(pid),
+        ]);
+        setLoaded(result as LoadedModel | null);
+        setVersions(versionList);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to load model");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [selectedVersionId]
+  );
 
   useEffect(() => {
     if (projectId) load(projectId);
   }, [projectId, load]);
+
+  const selectVersion = (versionId: string | null) => {
+    setSelectedVersionId(versionId);
+    void load(projectId, versionId);
+  };
+
+  useEffect(() => {
+    // project switch resets any historical selection
+    setSelectedVersionId(null);
+  }, [projectId]);
 
   // Pipeline poller: reload the model + toast when the queue settles (gap 1).
   const onPipelineSettled = useCallback(() => {
@@ -107,9 +137,12 @@ export default function AppModelPage() {
   const model = loaded?.appModel.model;
   const evidence = loaded?.appModel.evidence ?? {};
   const discrepancies = loaded?.appModel.discrepancies ?? [];
-  const canConfirm = Boolean(
-    loaded && (loaded.appModel.status === "IN_REVIEW" || loaded.appModel.status === "DRAFT")
-  );
+  const isHistorical = selectedVersionId !== null;
+  const canConfirm =
+    !isHistorical &&
+    Boolean(
+      loaded && (loaded.appModel.status === "IN_REVIEW" || loaded.appModel.status === "DRAFT")
+    );
 
   return (
     <div className="space-y-6">
@@ -148,6 +181,7 @@ export default function AppModelPage() {
           setOpenapi={setOpenapi}
           onRun={handleRunScout}
           busy={busy}
+          workerDown={workerDown}
           empty
         />
       )}
@@ -159,6 +193,10 @@ export default function AppModelPage() {
             discrepancyCount={discrepancies.length}
             busy={busy}
             canConfirm={canConfirm}
+            versions={versions}
+            selectedVersionId={selectedVersionId}
+            onSelectVersion={selectVersion}
+            isHistorical={isHistorical}
             onConfirm={() =>
               onMutate(
                 () => confirmAppModel(loaded.appModel.id),
@@ -255,6 +293,7 @@ export default function AppModelPage() {
             setOpenapi={setOpenapi}
             onRun={handleRunScout}
             busy={busy}
+          workerDown={workerDown}
           />
         </>
       )}

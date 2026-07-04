@@ -331,3 +331,32 @@ export async function submitAnswersAndRefuse(appModelId: string) {
   });
   return { ok: true as const, taskId: task.id };
 }
+
+// ── Model version browser (manual §8 gap 6) ───────────────────────────────
+
+export interface AppModelVersionInfo {
+  id: string;
+  version: number;
+  status: string;
+  createdAt: Date;
+  confirmedBy: string | null;
+}
+
+export async function listAppModelVersions(projectId: string): Promise<AppModelVersionInfo[]> {
+  await assertProjectInTeam(projectId);
+  return prisma.appModel.findMany({
+    where: { projectId },
+    orderBy: { version: "desc" },
+    select: { id: true, version: true, status: true, createdAt: true, confirmedBy: true },
+  });
+}
+
+/** Same shape as getLatestAppModel, for any historical version (read-only in UI). */
+export async function getAppModelVersion(appModelId: string) {
+  const { appModel } = await assertAppModelInTeam(appModelId);
+  const critique = await prisma.critique.findFirst({
+    where: { targetType: "app_model", targetId: appModel.id },
+    orderBy: { createdAt: "desc" },
+  });
+  return { appModel, critique };
+}
