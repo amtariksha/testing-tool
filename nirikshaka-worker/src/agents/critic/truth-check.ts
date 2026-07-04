@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { AgentTask } from "@prisma/client";
 import type { TaskContext, TaskResult } from "../../tasks/registry";
 import { apiSucceededSchema, parseTestYaml, type VerifyBackend } from "../../schema/test-yaml";
+import { buildRunNotification, sendWacrmNotification, shouldNotify } from "../../notify/wacrm";
 import { find5xx, findCrashes, findMatchingRequest, findUiErrors } from "./telemetry-queries";
 import { computeCaseVerdict, rollupRunVerdict, type TriState } from "./verdict";
 
@@ -148,11 +149,20 @@ export async function handleReviewRun(task: AgentTask, ctx: TaskContext): Promis
     amber,
   };
 
-  const report = {
+  // WhatsApp notify (doc §5.5), flag-first so a re-claimed task can't
+  // double-ping: the flag is persisted with the report BEFORE the POST.
+  const failed = Number((totals as { failed?: number }).failed ?? 0);
+  const alreadyNotified = Boolean(
+    (priorReport.notify as { sent?: boolean } | undefined)?.sent
+  );
+  const wantNotify = shouldNotify({ failed, amber }) && !alreadyNotified;
+
+  const report: Record<string, unknown> = {
     ...priorReport, // preserves taskId (idempotency anchor) + baseUrl
     verdict: runVerdict,
     totals,
     cases: caseSummaries,
+    ...(wantNotify ? { notify: { sent: true, at: new Date().toISOString() } } : {}),
   };
 
   await prisma.testRun.update({
@@ -163,5 +173,35 @@ export async function handleReviewRun(task: AgentTask, ctx: TaskContext): Promis
     },
   });
 
-  return { runId, verdict: runVerdict, amber, cases: caseSummaries.length };
+  if (wantNotify) {
+    const project = await prisma.project.findUnique({
+      where: { id: run.projectId },
+      select: { name: true },
+    });
+    const topFindings = caseSummaries
+      .filter((c) => c.status === "failed" || c.verdict === "AMBER")
+      .slice(0, 2)
+      .map((c) => `${c.externalId} (${c.verdict ?? c.status})`);
+    const payload = buildRunNotification({
+      runId,
+      projectId: run.projectId,
+      projectName: project?.name ?? run.projectId,
+      verdict: runVerdict,
+      totals: {
+        total: caseSummaries.length,
+        passed: Number((totals as { passed?: number }).passed ?? 0),
+        failed,
+        skipped: Number((totals as { skipped?: number }).skipped ?? 0),
+        amber,
+      },
+      costUsd: Number(run.costUsd ?? 0),
+      scope: run.scope,
+      scopeRef: run.scopeRef,
+      topFindings,
+      dashboardUrl: ctx.config.DASHBOARD_URL,
+    });
+    await sendWacrmNotification(ctx.config, payload);
+  }
+
+  return { runId, verdict: runVerdict, amber, cases: caseSummaries.length, notified: wantNotify };
 }
