@@ -80,7 +80,7 @@ export default function LoginPage() {
               <Zap className="h-5 w-5 text-black" fill="black" />
             </div>
             <span className="font-bold text-xl text-foreground">
-              Eassy <span className="text-brand">QA</span>
+              Nirikshaka
             </span>
           </Link>
 
@@ -113,7 +113,7 @@ export default function LoginPage() {
             {/* Testimonial */}
             <div className="glass rounded-2xl p-5">
               <p className="text-sm text-muted-foreground italic mb-3">
-                &ldquo;Eassy QA replaced 3 tools for us. Our MTTR dropped by 60% in the first week.&rdquo;
+                &ldquo;Nirikshaka replaced 3 tools for us. Our MTTR dropped by 60% in the first week.&rdquo;
               </p>
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-lg bg-brand/20 text-brand font-bold text-xs flex items-center justify-center">
@@ -128,7 +128,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            © 2026 Eassy QA. Built for developers.
+            © 2026 Nirikshaka. Built for developers.
           </p>
         </div>
       </div>
@@ -147,7 +147,7 @@ export default function LoginPage() {
               <Zap className="h-4 w-4 text-black" fill="black" />
             </div>
             <span className="font-bold text-foreground">
-              Eassy <span className="text-brand">QA</span>
+              Nirikshaka
             </span>
           </Link>
 
