@@ -3,9 +3,20 @@
 import { cn } from "@/lib/utils";
 import { SEVERITY_STYLES, type Critique } from "../types";
 
-export function CritiquePanel({ critique }: { critique: Critique }) {
+export function CritiquePanel({ critique, status }: { critique: Critique; status?: string }) {
+  const escalated =
+    critique.verdict === "rejected" &&
+    (critique.iteration ?? 1) >= 3 &&
+    status === "IN_REVIEW";
+
   return (
     <div className="glass rounded-2xl p-5">
+      {escalated && (
+        <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+          Critic rejected this model 3 times — human review required. Fix the source docs or
+          resolve the findings below, then re-run Scout.
+        </div>
+      )}
       <h2 className="font-semibold mb-2">
         Critic verdict: <span className="text-brand">{critique.verdict}</span>
         {critique.iteration !== undefined && (

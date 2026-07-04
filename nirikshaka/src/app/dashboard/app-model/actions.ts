@@ -1,8 +1,10 @@
 "use server";
 
 import prisma from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { resolveUserCompany } from "@/app/dashboard/actions";
 import { getUser } from "@/app/auth/actions";
+import type { AppModelDoc, Discrepancy } from "./types";
 
 /**
  * Confirmation Gate server actions (implementation doc §4.3). All actions are
@@ -66,6 +68,17 @@ export async function confirmAppModel(appModelId: string) {
   }
   if (appModel.status !== "IN_REVIEW" && appModel.status !== "DRAFT") {
     throw new Error(`Cannot confirm a model in status ${appModel.status}`);
+  }
+  // Rejected features are the explicit re-mine signal — confirming over them
+  // would bake a known-wrong model into test generation.
+  const doc = appModel.model as unknown as AppModelDoc;
+  const rejected = doc.features.filter((f) => f.review?.decision === "rejected");
+  if (rejected.length > 0) {
+    throw new Error(
+      `Resolve or re-mine ${rejected.length} rejected feature(s) before confirming: ${rejected
+        .map((f) => f.name)
+        .join(", ")}`
+    );
   }
   const user = await getUser();
   await prisma.appModel.update({
@@ -161,4 +174,160 @@ export async function runScout(projectId: string, sources: ScoutSourceInput[]) {
     },
   });
   return { ok: true, taskId: task.id };
+}
+
+// ── Confirmation Gate v2 (doc §4.3) ───────────────────────────────────────
+// All review state lives inside AppModel.model Json using fields declared in
+// the worker schema (nirikshaka-worker/src/schema/app-model.ts) — anything
+// else would be stripped on the worker's next parse. Mutations are
+// read-modify-write, last-write-wins: acceptable for the single-reviewer
+// pilot.
+
+/** Guarded read-modify-write on the LATEST, non-CONFIRMED model version. */
+async function mutateLatestModelDoc(
+  appModelId: string,
+  mutate: (doc: AppModelDoc) => AppModelDoc
+): Promise<void> {
+  const { appModel } = await assertAppModelInTeam(appModelId);
+  if (appModel.status === "CONFIRMED") {
+    throw new Error("Model is CONFIRMED — re-run Scout to change it");
+  }
+  const latest = await prisma.appModel.findFirst({
+    where: { projectId: appModel.projectId },
+    orderBy: { version: "desc" },
+    select: { id: true },
+  });
+  if (latest && latest.id !== appModelId) {
+    throw new Error("Only the latest model version can be edited");
+  }
+  const next = mutate(appModel.model as unknown as AppModelDoc);
+  await prisma.appModel.update({
+    where: { id: appModelId },
+    data: { model: next as unknown as Prisma.InputJsonValue },
+  });
+}
+
+async function reviewerEmail(): Promise<string | undefined> {
+  const user = await getUser();
+  return user?.email ?? undefined;
+}
+
+export async function reviewFeature(
+  appModelId: string,
+  featureId: string,
+  review: { decision?: "approved" | "rejected"; criticalPath?: boolean; note?: string }
+) {
+  const by = await reviewerEmail();
+  await mutateLatestModelDoc(appModelId, (doc) => ({
+    ...doc,
+    features: doc.features.map((f) =>
+      f.id === featureId
+        ? { ...f, review: { ...f.review, ...review, by, at: new Date().toISOString() } }
+        : f
+    ),
+  }));
+  return { ok: true as const };
+}
+
+export async function editFeature(
+  appModelId: string,
+  featureId: string,
+  patch: { name?: string; roles?: string[]; screens?: string[]; apis?: string[]; states?: string[] }
+) {
+  const by = await reviewerEmail();
+  await mutateLatestModelDoc(appModelId, (doc) => ({
+    ...doc,
+    features: doc.features.map((f) =>
+      f.id === featureId
+        ? {
+            ...f,
+            ...patch,
+            review: { ...f.review, edited: true, by, at: new Date().toISOString() },
+          }
+        : f
+    ),
+  }));
+  return { ok: true as const };
+}
+
+export async function resolveDiscrepancy(appModelId: string, index: number, resolution: string) {
+  const { appModel } = await assertAppModelInTeam(appModelId);
+  if (appModel.status === "CONFIRMED") {
+    throw new Error("Model is CONFIRMED — re-run Scout to change it");
+  }
+  const discrepancies = (appModel.discrepancies ?? []) as unknown as Discrepancy[];
+  if (index < 0 || index >= discrepancies.length) {
+    throw new Error("Discrepancy not found");
+  }
+  const by = await reviewerEmail();
+  const next = discrepancies.map((d, i) =>
+    i === index
+      ? { ...d, resolution, resolvedBy: by, resolvedAt: new Date().toISOString() }
+      : d
+  );
+  await prisma.appModel.update({
+    where: { id: appModelId },
+    data: { discrepancies: next as unknown as Prisma.InputJsonValue },
+  });
+  return { ok: true as const };
+}
+
+export async function answerQuestion(appModelId: string, questionId: string, answer: string) {
+  if (answer.trim().length === 0) {
+    throw new Error("Answer cannot be empty");
+  }
+  const by = await reviewerEmail();
+  await mutateLatestModelDoc(appModelId, (doc) => ({
+    ...doc,
+    targeted_questions: (doc.targeted_questions ?? []).map((q) =>
+      q.id === questionId
+        ? { ...q, answer: { text: answer.trim(), by, at: new Date().toISOString() } }
+        : q
+    ),
+  }));
+  return { ok: true as const };
+}
+
+/**
+ * Collect answered questions and enqueue a fresh fuse_model carrying the
+ * original sources plus the answers (they become human evidence, doc §4.3).
+ * iteration resets to 1: a human-informed run is a new generation, not a
+ * critic retry.
+ */
+export async function submitAnswersAndRefuse(appModelId: string) {
+  const { appModel } = await assertAppModelInTeam(appModelId);
+  const doc = appModel.model as unknown as AppModelDoc;
+  const answered = (doc.targeted_questions ?? []).filter((q) => q.answer?.text);
+  if (answered.length === 0) {
+    throw new Error("Answer at least one question before re-fusing");
+  }
+
+  // Recover the original sources from the newest fuse_model task. Assumes
+  // agent_tasks rows are not pruned (true today) — if pruning ever lands,
+  // snapshot sources onto the model instead.
+  const lastFuse = await prisma.agentTask.findFirst({
+    where: { projectId: appModel.projectId, type: "fuse_model" },
+    orderBy: { createdAt: "desc" },
+    select: { payload: true },
+  });
+  const sources = ((lastFuse?.payload ?? {}) as { sources?: unknown[] }).sources ?? [];
+
+  const task = await prisma.agentTask.create({
+    data: {
+      type: "fuse_model",
+      projectId: appModel.projectId,
+      payload: {
+        sources,
+        iteration: 1,
+        answers: answered.map((q) => ({
+          questionId: q.id,
+          question: q.question,
+          answer: q.answer!.text,
+          featureId: q.featureId,
+          by: q.answer!.by,
+        })),
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+  return { ok: true as const, taskId: task.id };
 }

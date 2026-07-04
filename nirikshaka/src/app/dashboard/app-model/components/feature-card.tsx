@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { CheckCircle2, XCircle, Pencil, Star } from "lucide-react";
 import { confidenceColor, type EvidenceRef, type Feature } from "../types";
 
 interface FeatureCardProps {
@@ -8,16 +9,46 @@ interface FeatureCardProps {
   evidence: EvidenceRef[];
   isOpen: boolean;
   onToggle: () => void;
+  readOnly?: boolean;
+  onReview?: (review: { decision?: "approved" | "rejected"; criticalPath?: boolean }) => void;
+  onEdit?: () => void;
 }
 
-export function FeatureCard({ feature, evidence, isOpen, onToggle }: FeatureCardProps) {
+export function FeatureCard({
+  feature,
+  evidence,
+  isOpen,
+  onToggle,
+  readOnly,
+  onReview,
+  onEdit,
+}: FeatureCardProps) {
+  const review = feature.review;
   return (
-    <div className="glass rounded-2xl p-4">
+    <div
+      className={cn(
+        "glass rounded-2xl p-4",
+        review?.decision === "rejected" && "border border-red-500/40",
+        review?.decision === "approved" && "border border-green-500/30"
+      )}
+    >
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between gap-4 text-left"
       >
-        <span className="font-medium">{feature.name}</span>
+        <span className="font-medium flex items-center gap-2">
+          {feature.name}
+          {review?.criticalPath && (
+            <Star className="h-3.5 w-3.5 text-yellow-400 fill-yellow-400" aria-label="critical path" />
+          )}
+          {review?.decision === "approved" && <CheckCircle2 className="h-4 w-4 text-green-400" />}
+          {review?.decision === "rejected" && <XCircle className="h-4 w-4 text-red-400" />}
+          {review?.edited && (
+            <span className="text-[10px] uppercase text-muted-foreground border border-border rounded px-1">
+              edited
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-3 shrink-0">
           <div className="w-28 h-2 rounded-full bg-border overflow-hidden">
             <div
@@ -32,6 +63,11 @@ export function FeatureCard({ feature, evidence, isOpen, onToggle }: FeatureCard
       </button>
       {isOpen && (
         <div className="mt-4 space-y-2 text-sm border-t border-border pt-3">
+          {feature.summary && (
+            <p className="text-xs text-muted-foreground whitespace-pre-line border-l-2 border-brand/40 pl-2">
+              {feature.summary}
+            </p>
+          )}
           <DetailRow label="Roles" values={feature.roles} />
           <DetailRow label="Screens" values={feature.screens} />
           <DetailRow label="APIs" values={feature.apis} />
@@ -63,9 +99,67 @@ export function FeatureCard({ feature, evidence, isOpen, onToggle }: FeatureCard
               ))
             )}
           </div>
+          {!readOnly && onReview && (
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-border">
+              <ReviewButton
+                active={review?.decision === "approved"}
+                activeClass="bg-green-500/15 text-green-400 border-green-500/40"
+                onClick={() =>
+                  onReview({ decision: review?.decision === "approved" ? undefined : "approved" })
+                }
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" /> Approve
+              </ReviewButton>
+              <ReviewButton
+                active={review?.decision === "rejected"}
+                activeClass="bg-red-500/15 text-red-400 border-red-500/40"
+                onClick={() =>
+                  onReview({ decision: review?.decision === "rejected" ? undefined : "rejected" })
+                }
+              >
+                <XCircle className="h-3.5 w-3.5" /> Reject
+              </ReviewButton>
+              {onEdit && (
+                <ReviewButton active={false} activeClass="" onClick={onEdit}>
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </ReviewButton>
+              )}
+              <ReviewButton
+                active={Boolean(review?.criticalPath)}
+                activeClass="bg-yellow-500/15 text-yellow-400 border-yellow-500/40"
+                onClick={() => onReview({ criticalPath: !review?.criticalPath })}
+              >
+                <Star className="h-3.5 w-3.5" /> Critical path
+              </ReviewButton>
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+function ReviewButton({
+  active,
+  activeClass,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  activeClass: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border border-border hover:bg-card transition-colors",
+        active && activeClass
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

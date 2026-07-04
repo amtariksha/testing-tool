@@ -8,14 +8,22 @@ import {
   confirmAppModel,
   rejectAppModel,
   runScout,
+  reviewFeature,
+  editFeature,
+  resolveDiscrepancy,
+  answerQuestion,
+  submitAnswersAndRefuse,
 } from "./actions";
-import type { LoadedModel, PilotProject } from "./types";
+import type { Feature, LoadedModel, PilotProject } from "./types";
 import { useScoutPipeline } from "./use-scout-pipeline";
 import { StatusHeader } from "./components/status-header";
 import { TaskProgressChip } from "./components/task-progress-chip";
 import { CritiquePanel } from "./components/critique-panel";
 import { DiscrepancyInbox } from "./components/discrepancy-inbox";
 import { FeatureCard } from "./components/feature-card";
+import { FeatureEditDialog } from "./components/feature-edit-dialog";
+import { ExplainBackPanel } from "./components/explain-back-panel";
+import { QuestionsPanel } from "./components/questions-panel";
 import { RunScoutPanel } from "./components/run-scout-panel";
 
 export default function AppModelPage() {
@@ -27,6 +35,7 @@ export default function AppModelPage() {
   const [busy, setBusy] = useState(false);
   const [prd, setPrd] = useState("");
   const [openapi, setOpenapi] = useState("");
+  const [editing, setEditing] = useState<Feature | null>(null);
 
   useEffect(() => {
     getPilotProjects().then((p) => {
@@ -163,9 +172,47 @@ export default function AppModelPage() {
             <TaskProgressChip tasks={pipeline.tasks} />
           </StatusHeader>
 
-          {loaded.critique && <CritiquePanel critique={loaded.critique} />}
+          {loaded.critique && (
+            <CritiquePanel critique={loaded.critique} status={loaded.appModel.status} />
+          )}
 
-          <DiscrepancyInbox discrepancies={discrepancies} />
+          <DiscrepancyInbox
+            discrepancies={discrepancies}
+            readOnly={!canConfirm}
+            busy={busy}
+            onResolve={(index, resolution) =>
+              onMutate(
+                () => resolveDiscrepancy(loaded.appModel.id, index, resolution),
+                "Discrepancy resolved"
+              )
+            }
+          />
+
+          <ExplainBackPanel
+            features={model.features}
+            readOnly={!canConfirm}
+            onSummaryWrong={(featureId) =>
+              onMutate(
+                () => reviewFeature(loaded.appModel.id, featureId, { decision: "rejected" }),
+                "Feature rejected — re-mine before confirming"
+              )
+            }
+          />
+
+          <QuestionsPanel
+            questions={model.targeted_questions ?? []}
+            readOnly={!canConfirm}
+            busy={busy}
+            onAnswer={(questionId, answer) =>
+              onMutate(() => answerQuestion(loaded.appModel.id, questionId, answer), "Answer saved")
+            }
+            onSubmitAndRefuse={() =>
+              onMutate(async () => {
+                await submitAnswersAndRefuse(loaded.appModel.id);
+                pipeline.notifyEnqueued();
+              }, "Scout re-fuse enqueued with your answers")
+            }
+          />
 
           <div className="grid gap-3">
             {model.features.map((feature) => (
@@ -175,9 +222,31 @@ export default function AppModelPage() {
                 evidence={evidence[`feature:${feature.id}`] ?? []}
                 isOpen={expanded === feature.id}
                 onToggle={() => setExpanded(expanded === feature.id ? null : feature.id)}
+                readOnly={!canConfirm}
+                onReview={(review) =>
+                  onMutate(() => reviewFeature(loaded.appModel.id, feature.id, review))
+                }
+                onEdit={() => setEditing(feature)}
               />
             ))}
           </div>
+
+          {editing && (
+            <FeatureEditDialog
+              key={editing.id}
+              feature={editing}
+              open={Boolean(editing)}
+              onOpenChange={(open) => {
+                if (!open) setEditing(null);
+              }}
+              onSave={(patch) =>
+                onMutate(
+                  () => editFeature(loaded.appModel.id, editing.id, patch),
+                  "Feature updated (marked as human-edited)"
+                )
+              }
+            />
+          )}
 
           <RunScoutPanel
             prd={prd}
