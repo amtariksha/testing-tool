@@ -529,3 +529,18 @@ model AgentHeartbeat {
   @@map("agent_heartbeats")
 }
 
+
+// ─── TEST STRATEGY (Phase 3) ─────────────────────────────────
+
+model TestStrategy {
+  id         String   @id @default(cuid())
+  projectId  String
+  appModelId String
+  strategy   Json
+  status     String   @default("ACTIVE") // ACTIVE | SUPERSEDED
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@index([appModelId])
+  @@map("test_strategies")
+}
