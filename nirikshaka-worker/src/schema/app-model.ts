@@ -12,6 +12,22 @@ export const businessRuleSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
+/**
+ * Human review state written by the Confirmation Gate (dashboard). The
+ * dashboard mirrors these shapes loosely — appModelSchema.parse() strips
+ * unknown keys, so any field the dashboard writes MUST be declared here or
+ * a worker re-write of the doc would silently drop it.
+ */
+export const featureReviewSchema = z.object({
+  decision: z.enum(["approved", "rejected"]).optional(),
+  criticalPath: z.boolean().optional(),
+  note: z.string().optional(),
+  edited: z.boolean().optional(),
+  by: z.string().optional(),
+  at: z.string().optional(), // ISO timestamp
+});
+export type FeatureReview = z.infer<typeof featureReviewSchema>;
+
 export const featureSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -23,6 +39,9 @@ export const featureSchema = z.object({
   depends_on: z.array(z.string()).default([]),
   affects: z.array(z.string()).default([]),
   business_rules: z.array(businessRuleSchema).default([]),
+  /** Scout's 5-line explain-back summary (§4.3); absent on pre-gap-4 rows. */
+  summary: z.string().optional(),
+  review: featureReviewSchema.optional(),
 });
 
 export const screenTransitionSchema = z.object({
@@ -68,6 +87,22 @@ export const coverageBoundariesSchema = z.object({
   needs_human: z.array(z.string()).default([]),
 });
 
+/**
+ * Scout's targeted questions (§4.3): concrete unknowns whose answers would
+ * change the model. Answers arrive from the dashboard and are fed back into
+ * the next fuse as evidence.
+ */
+export const targetedQuestionSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  featureId: z.string().optional(),
+  reason: z.string().optional(),
+  answer: z
+    .object({ text: z.string(), by: z.string().optional(), at: z.string().optional() })
+    .optional(),
+});
+export type TargetedQuestion = z.infer<typeof targetedQuestionSchema>;
+
 export const appModelSchema = z.object({
   features: z.array(featureSchema).default([]),
   screens: z.array(screenSchema).default([]),
@@ -79,6 +114,14 @@ export const appModelSchema = z.object({
     agent_can_test: [],
     needs_human: [],
   }),
+  targeted_questions: z.array(targetedQuestionSchema).default([]),
+  /** Provenance: which fuse task produced this doc (idempotency + audit). */
+  meta: z
+    .object({
+      sourceTaskId: z.string().optional(),
+      iteration: z.number().int().optional(),
+    })
+    .optional(),
 });
 
 export type AppModelDoc = z.infer<typeof appModelSchema>;
@@ -107,6 +150,8 @@ export const discrepancySchema = z.object({
   specSays: z.string(),
   telemetrySays: z.string(),
   resolution: z.string().optional(),
+  resolvedBy: z.string().optional(),
+  resolvedAt: z.string().optional(), // ISO timestamp
 });
 export const discrepanciesSchema = z.array(discrepancySchema);
 export type Discrepancy = z.infer<typeof discrepancySchema>;
