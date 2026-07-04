@@ -11,6 +11,7 @@ const ALLOWED_TASK_TYPES = [
   "noop",
   "fuse_model",
   "review_model",
+  "execute_run",
 ] as const;
 
 export async function POST(req: Request) {

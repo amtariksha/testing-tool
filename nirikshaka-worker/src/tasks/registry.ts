@@ -4,6 +4,7 @@ import type { RealtimePublisher } from "../realtime";
 import type { Queryable } from "../agents/scout/types";
 import { handleFuseModel } from "../agents/scout";
 import { handleReviewModel } from "../agents/critic";
+import { handleExecuteRun } from "../agents/runner";
 
 export interface TaskContext {
   prisma: PrismaClient;
@@ -33,6 +34,7 @@ export const registry: Record<string, TaskHandler> = {
   },
   fuse_model: handleFuseModel,
   review_model: handleReviewModel,
+  execute_run: handleExecuteRun,
 };
 
 export function claimableTypes(): string[] {
