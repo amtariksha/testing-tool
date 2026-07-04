@@ -10,7 +10,7 @@
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && mkdir -p dist/src/llm/prompts && cp src/llm/prompts/*.md dist/src/llm/prompts/",
     "start": "node dist/src/index.js",
     "generate": "prisma generate",
     "sync:schema": "cp ../nirikshaka/prisma/schema.prisma prisma/schema.prisma && prisma generate",
