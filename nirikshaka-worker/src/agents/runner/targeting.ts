@@ -111,3 +111,12 @@ export function locatorFor(page: Page, selector: ResolvedSelector): Locator {
 export function buildLocator(page: Page, target: TargetInput): Locator {
   return locatorFor(page, pickStrategy(target));
 }
+
+/** Like buildLocator but without .first() collapse — for expect_count. */
+export function buildLocatorAll(page: Page, target: TargetInput): Locator {
+  const selector = pickStrategy(target);
+  if (selector.strategy === "css") return page.locator(selector.value);
+  if (selector.strategy === "text") return page.getByText(selector.value);
+  if (selector.strategy === "testid") return page.getByTestId(selector.value);
+  return locatorFor(page, selector);
+}
