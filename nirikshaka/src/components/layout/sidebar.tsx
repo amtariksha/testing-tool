@@ -24,6 +24,7 @@ import {
   LogOut,
   Footprints,
   ScanSearch,
+  FlaskConical,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -39,6 +40,7 @@ const navItems = [
     section: "Intelligence",
     items: [
       { label: "App Model", icon: ScanSearch, href: "/dashboard/app-model" },
+      { label: "Test Runs", icon: FlaskConical, href: "/dashboard/test-runs" },
     ],
   },
   {
