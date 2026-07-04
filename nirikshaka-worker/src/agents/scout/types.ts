@@ -1,9 +1,14 @@
 import type {
+  Feature,
   Screen,
   Flow,
   ApiChain,
+  Role,
+  Entity,
   EvidenceIndex,
 } from "../../schema/app-model";
+
+export type { Role, Entity } from "../../schema/app-model";
 
 /** Minimal query surface satisfied by pg.Pool and pg.PoolClient. */
 export interface Queryable {
@@ -15,9 +20,12 @@ export interface Queryable {
 
 /** A miner produces a partial app model plus the evidence backing its claims. */
 export interface ModelFragment {
+  features?: Feature[];
   screens?: Screen[];
   flows?: Flow[];
   apiChains?: ApiChain[];
+  roles?: Role[];
+  entities?: Entity[];
   evidence: EvidenceIndex;
 }
 

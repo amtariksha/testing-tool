@@ -86,6 +86,8 @@ export type Feature = z.infer<typeof featureSchema>;
 export type Screen = z.infer<typeof screenSchema>;
 export type Flow = z.infer<typeof flowSchema>;
 export type ApiChain = z.infer<typeof apiChainSchema>;
+export type Role = z.infer<typeof roleSchema>;
+export type Entity = z.infer<typeof entitySchema>;
 
 /**
  * Evidence index: maps a claim id to the sources that support it

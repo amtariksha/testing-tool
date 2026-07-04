@@ -1,5 +1,6 @@
 import { loadConfig } from "./config";
 import { createPrismaClient } from "./db/client";
+import { createSqlPool, asQueryable } from "./db/sql";
 import { createRealtimePublisher } from "./realtime";
 import { startHeartbeat } from "./heartbeat";
 import { startClaimLoop } from "./claimer";
@@ -15,9 +16,10 @@ async function main(): Promise<void> {
   console.log("[boot] database connection OK");
 
   const realtime = createRealtimePublisher(config);
+  const sqlPool = createSqlPool(config.DATABASE_URL);
   const heartbeat = startHeartbeat(prisma, AGENT_NAME, config.HEARTBEAT_INTERVAL_MS);
 
-  const ctx: TaskContext = { prisma, config, realtime };
+  const ctx: TaskContext = { prisma, config, realtime, sql: asQueryable(sqlPool) };
   const loop = startClaimLoop(ctx, heartbeat);
 
   // The loop isolates task errors internally; if it still dies, exit so
@@ -39,6 +41,7 @@ async function main(): Promise<void> {
     await loop.done.catch(() => {});
     await heartbeat.stop();
     await realtime.close();
+    await sqlPool.end().catch(() => {});
     await prisma.$disconnect();
     console.log("[boot] shutdown complete");
     process.exit(0);

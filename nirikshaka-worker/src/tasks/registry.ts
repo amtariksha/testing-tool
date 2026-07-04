@@ -1,11 +1,15 @@
 import type { PrismaClient, AgentTask } from "@prisma/client";
 import type { WorkerConfig } from "../config";
 import type { RealtimePublisher } from "../realtime";
+import type { Queryable } from "../agents/scout/types";
+import { handleFuseModel } from "../agents/scout";
+import { handleReviewModel } from "../agents/critic";
 
 export interface TaskContext {
   prisma: PrismaClient;
   config: WorkerConfig;
   realtime: RealtimePublisher;
+  sql: Queryable; // raw-SQL surface for miners
 }
 
 export type TaskResult = Record<string, unknown>;
@@ -27,6 +31,8 @@ export const registry: Record<string, TaskHandler> = {
     await sleep(Math.min(delayMs, 10_000));
     return { ok: true, echo: task.payload };
   },
+  fuse_model: handleFuseModel,
+  review_model: handleReviewModel,
 };
 
 export function claimableTypes(): string[] {
