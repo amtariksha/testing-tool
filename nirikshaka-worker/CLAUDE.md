@@ -34,9 +34,16 @@ stays on Vercel and is NOT rebuilt.
 
 ## Commands
 - pnpm dev               # worker with tsx watch
-- pnpm build             # prisma generate + tsc → dist/
+- pnpm build             # prisma generate + tsc + prompts copy → dist/
 - pnpm test              # vitest
 - pnpm sync:schema       # re-copy schema from ../nirikshaka + generate
 - pnpm migrate           # delegated to ../nirikshaka prisma migrate deploy
 - pnpm gate:0            # Phase 0 verification gate
 - pnpm backfill:encrypt  # encrypt legacy APIRequest bodies (idempotent)
+- pnpm seed:smoke --project <id>   # upsert the hand-written smoke suite
+- pnpm mcp               # MCP server (stdio; MCP_TRANSPORT=http for remote)
+
+## Phase 2 box setup (one-time)
+- pnpm exec playwright install chromium
+- sudo pnpm exec playwright install-deps chromium
+- Claude Code: claude mcp add nirikshaka -- node <repo>/nirikshaka-worker/dist/src/mcp/server.js
