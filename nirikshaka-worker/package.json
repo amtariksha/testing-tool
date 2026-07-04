@@ -18,7 +18,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "backfill:encrypt": "tsx scripts/backfill-encrypt.ts",
-    "gate:0": "tsx scripts/gate0.ts"
+    "gate:0": "tsx scripts/gate0.ts",
+    "seed:smoke": "tsx scripts/seed-smoke-tests.ts",
+    "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

@@ -1,0 +1,29 @@
+# CommunityOS admin — login smoke (hand-written, doc §7 Phase 2).
+# base_url + credentials arrive via the execute_run payload — never hardcoded.
+id: smoke-login
+name: Login as community admin
+suite: smoke
+platform: web
+priority: P0
+tags: [smoke, auth, critical]
+source_flow: "flow:admin-login"
+
+steps:
+  - goto: "{{project.base_url}}/login"
+  - expect_visible: "Sign in"
+  - fill: { label: "Phone number", value: "{{data.admin_phone}}" }
+  - click: "Send OTP"
+  - expect_visible: "Enter OTP"
+  - fill: { label: "OTP", value: "{{data.admin_otp}}" }
+  - click: "Verify"
+  - expect_url_contains: "/dashboard"
+
+assertions:
+  - no_console_errors: true
+
+verify_backend:
+  window_ms: 8000
+  expect:
+    - no_5xx: true
+    - no_new_crashes: true
+    - api_succeeded: { path_contains: "otp", method: POST, status_lt: 400 }

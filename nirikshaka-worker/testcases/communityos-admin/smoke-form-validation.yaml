@@ -1,0 +1,28 @@
+# CommunityOS admin — form validation smoke: an empty submit must show a
+# validation error AND must not 500 (validation happening server-side with a
+# crash would be the classic silent failure).
+id: smoke-form-validation
+name: Empty announcement form shows validation errors
+suite: smoke
+platform: web
+priority: P1
+tags: [smoke, validation]
+source_flow: "flow:admin-announcement-crud"
+
+steps:
+  - goto: "{{project.base_url}}/login"
+  - fill: { label: "Phone number", value: "{{data.admin_phone}}" }
+  - click: "Send OTP"
+  - fill: { label: "OTP", value: "{{data.admin_otp}}" }
+  - click: "Verify"
+  - expect_url_contains: "/dashboard"
+  - goto: "{{project.base_url}}/announcements"
+  - click: "New Announcement"
+  - click: "Publish"
+  - expect_visible: "required"
+
+verify_backend:
+  window_ms: 8000
+  expect:
+    - no_5xx: true
+    - no_new_crashes: true

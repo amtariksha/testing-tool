@@ -1,0 +1,29 @@
+# CommunityOS admin — list + filter smoke.
+id: smoke-list-filter
+name: Filter the maintenance requests list
+suite: smoke
+platform: web
+priority: P1
+tags: [smoke, list]
+source_flow: "flow:admin-request-list"
+
+steps:
+  - goto: "{{project.base_url}}/login"
+  - fill: { label: "Phone number", value: "{{data.admin_phone}}" }
+  - click: "Send OTP"
+  - fill: { label: "OTP", value: "{{data.admin_otp}}" }
+  - click: "Verify"
+  - expect_url_contains: "/dashboard"
+  - goto: "{{project.base_url}}/maintenance-requests"
+  - expect_visible: "Maintenance"
+  - fill: { placeholder: "Search", value: "plumbing" }
+  - wait_for_network_idle: true
+
+assertions:
+  - no_console_errors: true
+
+verify_backend:
+  window_ms: 8000
+  expect:
+    - no_5xx: true
+    - no_new_crashes: true
