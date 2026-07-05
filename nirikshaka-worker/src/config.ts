@@ -31,6 +31,18 @@ const envSchema = z.object({
   AUTHOR_VALIDATION_RETRIES: z.coerce.number().int().nonnegative().default(2),
   CRITIC_TEST_MAX_ITERATIONS: z.coerce.number().int().positive().default(3),
   REVIEW_TESTS_BATCH_SIZE: z.coerce.number().int().positive().default(10),
+  // ── Analyst + scheduler + runner hardening (Phase 4) ──
+  ANALYST_HOUR: z.coerce.number().int().min(0).max(23).default(3),
+  SCHEDULER_TICK_MS: z.coerce.number().int().positive().default(900_000),
+  FLAKE_WINDOW_RUNS: z.coerce.number().int().positive().default(10),
+  FLAKE_MIN_SAMPLES: z.coerce.number().int().positive().default(4),
+  FLAKE_RATE_THRESHOLD: z.coerce.number().positive().default(0.3),
+  COST_OUTLIER_Z: z.coerce.number().positive().default(3),
+  COST_OUTLIER_MIN_USD: z.coerce.number().nonnegative().default(0.25),
+  DRIFT_CONFIDENCE_THRESHOLD: z.coerce.number().positive().default(0.6),
+  STALENESS_FLOW_SHIFT: z.coerce.number().positive().default(0.5),
+  MAX_PARALLEL_CONTEXTS: z.coerce.number().int().positive().default(2),
+  RETRY_FAILED_CASES: z.coerce.number().int().nonnegative().default(1),
 });
 
 export type WorkerConfig = z.infer<typeof envSchema>;
