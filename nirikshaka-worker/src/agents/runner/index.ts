@@ -4,15 +4,19 @@ import { isLlmConfigured } from "../../llm/client";
 import { parseTestYaml } from "../../schema/test-yaml";
 import { launchBrowser, type BrowserSession } from "./browser";
 import { runCase } from "./case-runner";
-import { charge, createBudget, isExceeded, toDecimal4, type CostBudget } from "./cost";
+import { toDecimal4 } from "./cost";
 import { createRecoverFn } from "./recovery";
+import { CostLedger, finalizeCaseStatus } from "./retry";
+import { runPool } from "../../util/pool";
 import { runPayloadSchema, type CaseOutcome, type RunPayload } from "./types";
 
 /**
- * execute_run task (doc §5.3): whole run in-process, cases sequential in
- * Phase 2. At-least-once safe: the TestRun is found again via
- * report.taskId on re-claim — terminal runs dedupe, live runs resume
- * skipping cases that already have results, budget seeded from prior spend.
+ * execute_run task (doc §5.3, §7 Phase 4): runs cases across a bounded pool of
+ * Playwright contexts (MAX_PARALLEL_CONTEXTS), retries a failed case once
+ * (flaky flag), and stops dequeuing when the shared cost ledger trips.
+ * At-least-once safe: the TestRun is found again via report.taskId on
+ * re-claim — terminal runs dedupe, live runs resume skipping cases that
+ * already have results, spend seeded from prior costUsd.
  */
 export async function handleExecuteRun(task: AgentTask, ctx: TaskContext): Promise<TaskResult> {
   const { prisma, config } = ctx;
@@ -64,15 +68,13 @@ export async function handleExecuteRun(task: AgentTask, ctx: TaskContext): Promi
   });
   const doneCaseIds = new Set(existingResults.map((r) => r.caseId));
 
-  let budget: CostBudget = createBudget(
+  const ledger = new CostLedger(
     payload.maxCostUsd ?? config.RUNNER_MAX_COST_USD,
     Number(run.costUsd ?? 0)
   );
-  const chargeLlm = (usd: number): boolean => {
-    budget = charge(budget, usd);
-    return !isExceeded(budget);
-  };
+  const chargeLlm = (usd: number): boolean => ledger.add(usd);
   const recover = isLlmConfigured() ? createRecoverFn(chargeLlm) : undefined;
+  const retries = config.RETRY_FAILED_CASES;
 
   let session: BrowserSession;
   try {
@@ -88,11 +90,13 @@ export async function handleExecuteRun(task: AgentTask, ctx: TaskContext): Promi
     throw new Error(message);
   }
 
-  try {
-    for (const testCase of cases) {
-      if (doneCaseIds.has(testCase.id)) continue;
+  const pending = cases.filter((c) => !doneCaseIds.has(c.id));
+  const deps = { prisma, config, session, projectId, runId: run.id, recover, canSpendLlm: () => ledger.canSpend() };
 
-      if (isExceeded(budget)) {
+  try {
+    await runPool(pending, config.MAX_PARALLEL_CONTEXTS, async (testCase) => {
+      // Ledger tripped mid-run → skip the rest (in-flight cases finish).
+      if (ledger.tripped) {
         await writeResult(prisma, run.id, testCase.id, {
           status: "skipped",
           durationMs: 0,
@@ -103,26 +107,30 @@ export async function handleExecuteRun(task: AgentTask, ctx: TaskContext): Promi
           screenshots: [],
           errorMessage: "cost-cap-exceeded",
         });
-        continue;
+        return;
       }
 
-      const outcome = await runOne(
-        { prisma, config, session, projectId, runId: run.id, recover, canSpendLlm: () => !isExceeded(budget) },
-        testCase,
-        payload
-      );
-      await writeResult(prisma, run.id, testCase.id, outcome);
-
-      // Incremental spend persistence + claim-lease renewal between cases
-      // (a slow run must survive the 300s stale-claim window).
-      await prisma.testRun.update({
-        where: { id: run.id },
-        data: { costUsd: toDecimal4(budget.spentUsd) },
+      // Attempt + one retry (fresh context each) → flaky classification.
+      const attempts: CaseOutcome[] = [];
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        attempts.push(await runOne(deps, testCase, payload));
+        if (attempts[attempts.length - 1]!.status === "passed") break;
+        if (ledger.tripped) break;
+      }
+      const finalized = finalizeCaseStatus(attempts);
+      await writeResult(prisma, run.id, testCase.id, finalized.outcome, {
+        flaky: finalized.flaky,
+        attempts: finalized.attempts,
       });
+
+      // Incremental spend + claim-lease renewal (survive the 300s stale window).
+      await prisma.testRun
+        .update({ where: { id: run.id }, data: { costUsd: toDecimal4(ledger.total) } })
+        .catch(() => {});
       await prisma.agentTask
         .update({ where: { id: task.id }, data: { claimedAt: new Date() } })
         .catch(() => {});
-    }
+    });
   } finally {
     await session.closeAll();
   }
@@ -134,6 +142,8 @@ export async function handleExecuteRun(task: AgentTask, ctx: TaskContext): Promi
     failed: results.filter((r) => r.status === "failed").length,
     skipped: results.filter((r) => r.status === "skipped").length,
     error: results.filter((r) => r.status === "error").length,
+    flaky: results.filter((r) => (r.verdict as { flaky?: boolean } | null)?.flaky === true).length,
+    skippedCostCap: results.filter((r) => r.errorMessage === "cost-cap-exceeded").length,
   };
   const runStatus = totals.failed > 0 ? "failed" : totals.error > 0 ? "error" : "passed";
 
@@ -143,7 +153,7 @@ export async function handleExecuteRun(task: AgentTask, ctx: TaskContext): Promi
       status: runStatus,
       finishedAt: new Date(),
       totals: totals as unknown as Prisma.InputJsonValue,
-      costUsd: toDecimal4(budget.spentUsd),
+      costUsd: toDecimal4(ledger.total),
     },
   });
 
@@ -152,7 +162,7 @@ export async function handleExecuteRun(task: AgentTask, ctx: TaskContext): Promi
     data: { type: "review_run", projectId, payload: { runId: run.id } },
   });
 
-  return { runId: run.id, status: runStatus, ...totals, costUsd: toDecimal4(budget.spentUsd) };
+  return { runId: run.id, status: runStatus, ...totals, costUsd: toDecimal4(ledger.total) };
 }
 
 async function runOne(
@@ -224,8 +234,14 @@ async function writeResult(
   prisma: PrismaClient,
   runId: string,
   caseId: string,
-  outcome: CaseOutcome
+  outcome: CaseOutcome,
+  meta?: { flaky: boolean; attempts: number }
 ): Promise<void> {
+  // The Truth Check overwrites verdict with the tri-state; seeding the flaky
+  // flag here lets it survive (truth-check spreads the prior verdict) and the
+  // Analyst read it. Only write a verdict when there's something to record.
+  const verdict =
+    meta?.flaky ? ({ flaky: true, attempts: meta.attempts } as Prisma.InputJsonValue) : undefined;
   await prisma.testCaseResult.create({
     data: {
       runId,
@@ -238,6 +254,7 @@ async function writeResult(
       stepLog: outcome.stepLog as unknown as Prisma.InputJsonValue,
       screenshots: outcome.screenshots as unknown as Prisma.InputJsonValue,
       errorMessage: outcome.errorMessage ?? null,
+      ...(verdict ? { verdict } : {}),
     },
   });
 }

@@ -119,8 +119,12 @@ export async function handleReviewRun(task: AgentTask, ctx: TaskContext): Promis
         expectations,
       });
       final = verdict.final;
+      // Preserve the runner's flaky flag (retry-once classification) so the
+      // Analyst can still read it after the truth check overwrites verdict.
+      const priorFlaky = (result.verdict as { flaky?: boolean; attempts?: number } | null) ?? {};
       verdictJson = {
         ...verdict,
+        ...(priorFlaky.flaky ? { flaky: true, attempts: priorFlaky.attempts } : {}),
         windowMs: verify.window_ms,
         checkedAt: new Date().toISOString(),
       } as unknown as Prisma.InputJsonValue;
@@ -202,6 +206,11 @@ export async function handleReviewRun(task: AgentTask, ctx: TaskContext): Promis
     });
     await sendWacrmNotification(ctx.config, payload);
   }
+
+  // Chain the Analyst's per-run signals (cost outliers / retry flakes).
+  await prisma.agentTask.create({
+    data: { type: "analyze_run", projectId: run.projectId, payload: { runId } },
+  });
 
   return { runId, verdict: runVerdict, amber, cases: caseSummaries.length, notified: wantNotify };
 }
