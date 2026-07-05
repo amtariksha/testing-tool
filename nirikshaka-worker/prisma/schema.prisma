@@ -407,6 +407,8 @@ model TestCase {
   confidence    String           @default("medium")
   generatedFrom Json?
   status        TestCaseStatus   @default(DRAFT)
+  quarantinedAt    DateTime?
+  quarantineReason String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   results       TestCaseResult[]

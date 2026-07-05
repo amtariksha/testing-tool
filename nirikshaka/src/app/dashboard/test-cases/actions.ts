@@ -53,6 +53,7 @@ export interface CaseRow {
   tags: string[];
   yaml: string;
   needsHuman: boolean;
+  quarantineReason: string | null;
   verdict: string | null;
   findings: { severity: string; claim: string; detail: string; suggestedFix?: string }[];
 }
@@ -88,6 +89,7 @@ async function toRow(
     tags: testCase.tags,
     yaml: testCase.yaml,
     needsHuman: testCase.tags.includes("needs-human"),
+    quarantineReason: testCase.quarantineReason ?? null,
     verdict: critique?.verdict ?? null,
     findings: (critique?.findings ?? []) as CaseRow["findings"],
   };
@@ -192,11 +194,9 @@ export async function rejectTestCase(caseId: string, mode: "retire" | "regenerat
 
 export async function unquarantineTestCase(caseId: string) {
   await assertCaseInTeam(caseId);
-  // quarantinedAt / quarantineReason are cleared in the Phase 4 build once
-  // those columns exist; here we just reactivate.
   await prisma.testCase.update({
     where: { id: caseId },
-    data: { status: "ACTIVE" },
+    data: { status: "ACTIVE", quarantinedAt: null, quarantineReason: null },
   });
   return { ok: true as const };
 }

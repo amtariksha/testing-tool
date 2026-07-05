@@ -60,6 +60,9 @@ export function CaseCard({
 
       {isOpen && (
         <div className="mt-3 space-y-3">
+          {testCase.quarantineReason && (
+            <p className="text-xs text-red-400">quarantined: {testCase.quarantineReason}</p>
+          )}
           {testCase.findings.length > 0 && (
             <ul className="space-y-1">
               {testCase.findings.map((f, i) => (
