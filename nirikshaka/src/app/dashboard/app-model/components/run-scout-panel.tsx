@@ -15,6 +15,7 @@ interface RunScoutPanelProps {
   busy: boolean;
   empty?: boolean;
   workerDown?: boolean;
+  stale?: boolean;
 }
 
 /**
@@ -30,6 +31,7 @@ export function RunScoutPanel({
   busy,
   empty,
   workerDown,
+  stale,
 }: RunScoutPanelProps) {
   const prdFileRef = useRef<HTMLInputElement>(null);
   const openapiFileRef = useRef<HTMLInputElement>(null);
@@ -50,6 +52,12 @@ export function RunScoutPanel({
       <h2 className="font-semibold">
         {empty ? "No model yet — run Scout" : "Re-run Scout with updated docs"}
       </h2>
+      {stale && (
+        <p className="text-xs text-red-400">
+          The Analyst marked this model STALE — recent telemetry diverged from the confirmed model.
+          Re-run Scout and re-confirm.
+        </p>
+      )}
       {workerDown && (
         <p className="text-xs text-yellow-400">
           Worker offline — the task will queue until it returns.

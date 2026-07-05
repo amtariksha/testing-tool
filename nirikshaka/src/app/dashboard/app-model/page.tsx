@@ -293,7 +293,8 @@ export default function AppModelPage() {
             setOpenapi={setOpenapi}
             onRun={handleRunScout}
             busy={busy}
-          workerDown={workerDown}
+            workerDown={workerDown}
+            stale={loaded.appModel.status === "STALE"}
           />
         </>
       )}
