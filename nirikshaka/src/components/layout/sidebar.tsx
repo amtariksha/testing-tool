@@ -25,6 +25,7 @@ import {
   Footprints,
   ScanSearch,
   FlaskConical,
+  ClipboardList,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -40,6 +41,7 @@ const navItems = [
     section: "Intelligence",
     items: [
       { label: "App Model", icon: ScanSearch, href: "/dashboard/app-model" },
+      { label: "Test Cases", icon: ClipboardList, href: "/dashboard/test-cases" },
       { label: "Test Runs", icon: FlaskConical, href: "/dashboard/test-runs" },
     ],
   },
