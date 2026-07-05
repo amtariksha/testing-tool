@@ -4,6 +4,7 @@ import { createSqlPool, asQueryable } from "./db/sql";
 import { createRealtimePublisher } from "./realtime";
 import { startHeartbeat } from "./heartbeat";
 import { startClaimLoop } from "./claimer";
+import { startScheduler } from "./scheduler";
 import type { TaskContext } from "./tasks/registry";
 
 const AGENT_NAME = "worker";
@@ -21,6 +22,7 @@ async function main(): Promise<void> {
 
   const ctx: TaskContext = { prisma, config, realtime, sql: asQueryable(sqlPool) };
   const loop = startClaimLoop(ctx, heartbeat);
+  const scheduler = startScheduler(prisma, config);
 
   // The loop isolates task errors internally; if it still dies, exit so
   // systemd restarts a clean process instead of idling forever.
@@ -37,6 +39,7 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`[boot] ${signal} received — draining`);
+    scheduler.stop();
     loop.stop();
     await loop.done.catch(() => {});
     await heartbeat.stop();
