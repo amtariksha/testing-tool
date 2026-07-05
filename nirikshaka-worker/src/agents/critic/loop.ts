@@ -27,3 +27,20 @@ export function decideNextStep(verdict: ModelVerdict, iteration: number): ModelL
   }
   return { nextStatus: "IN_REVIEW", reenqueueFuse: false, escalated: false };
 }
+
+/**
+ * The test-case flavor of the same loop (Phase 3): rejected below the cap →
+ * Author regenerates with the findings; at the cap (or an explicit
+ * needs_human verdict) → the case is flagged for a human.
+ */
+export type TestLoopAction = "accept" | "regenerate" | "needs_human";
+
+export function decideNextAction(
+  verdict: ModelVerdict,
+  iteration: number,
+  maxIterations: number
+): TestLoopAction {
+  if (verdict === "approved") return "accept";
+  if (verdict === "needs_human") return "needs_human";
+  return iteration < maxIterations ? "regenerate" : "needs_human";
+}

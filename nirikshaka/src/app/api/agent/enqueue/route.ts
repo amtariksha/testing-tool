@@ -15,6 +15,7 @@ const ALLOWED_TASK_TYPES = [
   "review_run",
   "plan_strategy",
   "generate_tests",
+  "review_tests",
 ] as const;
 
 export async function POST(req: Request) {

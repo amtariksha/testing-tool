@@ -8,6 +8,7 @@ import { handleReviewRun } from "../agents/critic/truth-check";
 import { handleExecuteRun } from "../agents/runner";
 import { handlePlanStrategy } from "../agents/strategist";
 import { handleGenerateTests } from "../agents/author";
+import { handleReviewTests } from "../agents/critic/review-tests-handler";
 
 export interface TaskContext {
   prisma: PrismaClient;
@@ -41,6 +42,7 @@ export const registry: Record<string, TaskHandler> = {
   review_run: handleReviewRun,
   plan_strategy: handlePlanStrategy,
   generate_tests: handleGenerateTests,
+  review_tests: handleReviewTests,
 };
 
 export function claimableTypes(): string[] {
