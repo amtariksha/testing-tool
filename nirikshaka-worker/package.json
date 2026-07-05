@@ -20,6 +20,8 @@
     "backfill:encrypt": "tsx scripts/backfill-encrypt.ts",
     "gate:0": "tsx scripts/gate0.ts",
     "seed:smoke": "tsx scripts/seed-smoke-tests.ts",
+    "import:md": "tsx scripts/import-md-cases.ts",
+    "gate:3": "tsx scripts/gate3.ts",
     "mcp": "tsx src/mcp/server.ts"
   },
   "dependencies": {
