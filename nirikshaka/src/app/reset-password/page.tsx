@@ -104,10 +104,10 @@ export default function ResetPasswordPage() {
 
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-foreground">
-              Create new password
+              Set your password
             </h2>
             <p className="text-muted-foreground mt-2">
-              Enter and confirm your new account password below
+              Choose a password for your account
             </p>
           </div>
 

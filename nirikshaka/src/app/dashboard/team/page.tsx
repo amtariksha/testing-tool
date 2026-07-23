@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { getRelativeTime } from "@/lib/utils";
-import { UserPlus, Crown, Shield, Code2, Eye } from "lucide-react";
+import { Crown, Shield, Code2, Eye, X } from "lucide-react";
 import { toast } from "sonner";
 import { getTeamMembers } from "../actions";
+import { removeTeamMember } from "./actions";
+import { InviteDialog } from "./invite-dialog";
 import type { TeamMember } from "@prisma/client";
 
 const roleConfig: Record<string, { label: string; icon: any; color: "brand" | "info" | "success" | "default" }> = {
@@ -20,12 +22,27 @@ export default function TeamPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     getTeamMembers().then(data => {
       setMembers(data as any);
       setIsLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const handleRemove = async (memberId: string, memberName: string) => {
+    if (!window.confirm(`Remove ${memberName} from the team?`)) return;
+    const result = await removeTeamMember(memberId);
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success(result.success ?? "Member removed");
+      load();
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -38,15 +55,7 @@ export default function TeamPage() {
           <h1 className="text-2xl font-bold text-foreground">Team</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Manage team members and permissions</p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => toast.success("Invite sent!")}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-brand text-black font-semibold text-sm"
-        >
-          <UserPlus className="h-4 w-4" />
-          Invite Member
-        </motion.button>
+        <InviteDialog onInvited={load} />
       </motion.div>
 
       <div className="card-premium overflow-hidden">
@@ -87,6 +96,15 @@ export default function TeamPage() {
                     <RoleIcon className="h-3 w-3" />
                     {role.label}
                   </Badge>
+                  {member.role !== "OWNER" && (
+                    <button
+                      onClick={() => handleRemove(member.id, member.user?.name || member.user?.email || "this member")}
+                      className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-400 hover:border-red-400/50"
+                      aria-label="Remove member"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </motion.div>
             );
