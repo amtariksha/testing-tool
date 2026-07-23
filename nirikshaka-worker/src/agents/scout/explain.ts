@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { complete, completeJsonWithRetry, extractJson, loadPrompt } from "../../llm/client";
+import { completeStructured, loadPrompt } from "../../llm/client";
 import type { AppModelDoc, Discrepancy } from "../../schema/app-model";
 
 /**
@@ -35,17 +35,14 @@ export async function generateExplainBack(
     coverage_boundaries: model.coverage_boundaries,
     discrepancies,
   };
-  const { value: output, costUsd } = await completeJsonWithRetry(
-    (feedback) =>
-      complete({
-        tier: "sonnet",
-        system,
-        user: JSON.stringify(projection, null, 2) + (feedback ? `\n\n${feedback}` : ""),
-        maxTokens: 16384,
-      }),
-    (text) => explainOutputSchema.parse(extractJson(text))
-  );
-  return { output, costUsd };
+  const result = await completeStructured({
+    tier: "sonnet",
+    system,
+    user: JSON.stringify(projection, null, 2),
+    maxTokens: 16384,
+  });
+  const output = explainOutputSchema.parse(result.value);
+  return { output, costUsd: result.costUsd };
 }
 
 /**

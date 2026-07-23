@@ -96,6 +96,65 @@ export function extractJson<T = unknown>(text: string): T {
 }
 
 /**
+ * Structured JSON output via forced tool use: the API constrains the model to
+ * "call" a single tool, so `input` arrives as ALREADY-PARSED, syntactically
+ * valid JSON — no fences, no unescaped-quote failures, no prose. Callers
+ * still Zod-validate the shape.
+ */
+export async function completeStructured(options: CompleteOptions): Promise<{
+  value: unknown;
+  tier: ModelTier;
+  costUsd: number;
+}> {
+  const tier = options.tier ?? "sonnet";
+  const cacheSystem = options.cacheSystem ?? true;
+
+  const response = await getClient().messages.create({
+    model: modelId(tier),
+    max_tokens: options.maxTokens ?? 4096,
+    ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+    system: [
+      {
+        type: "text",
+        text: options.system,
+        ...(cacheSystem ? { cache_control: { type: "ephemeral" as const } } : {}),
+      },
+    ],
+    tools: [
+      {
+        name: "emit_result",
+        description: "Emit the final structured result as JSON.",
+        input_schema: { type: "object" as const },
+      },
+    ],
+    tool_choice: { type: "tool", name: "emit_result" },
+    messages: [{ role: "user", content: options.user }],
+  });
+
+  if (response.stop_reason === "max_tokens") {
+    throw new Error(
+      `LLM structured output truncated at max_tokens=${options.maxTokens ?? 4096} — raise the cap`
+    );
+  }
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+  );
+  if (!toolUse) {
+    throw new Error("LLM returned no tool_use block for structured output");
+  }
+
+  const inputTokens =
+    response.usage.input_tokens +
+    (response.usage.cache_read_input_tokens ?? 0) +
+    (response.usage.cache_creation_input_tokens ?? 0);
+  return {
+    value: toolUse.input,
+    tier,
+    costUsd: estimateCostUsd(tier, inputTokens, response.usage.output_tokens),
+  };
+}
+
+/**
  * Run an LLM call whose output must parse as JSON; on a parse/validation
  * failure, retry ONCE with the error fed back (models occasionally emit
  * unescaped quotes when copying source text, or truncate). `call` receives

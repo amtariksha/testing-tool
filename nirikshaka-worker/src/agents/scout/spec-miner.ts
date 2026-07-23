@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { complete, completeJsonWithRetry, extractJson, loadPrompt } from "../../llm/client";
+import { completeStructured, loadPrompt } from "../../llm/client";
 import {
   featureSchema,
   roleSchema,
@@ -84,18 +84,28 @@ export async function minePrd(content: string): Promise<{
   costUsd: number;
 }> {
   const system = await loadPrompt("spec-miner");
-  const { value: parsed, costUsd } = await completeJsonWithRetry(
-    (feedback) =>
-      complete({
-        tier: "sonnet",
-        system,
-        user:
-          `Application spec document:\n\n${content}` +
-          (feedback ? `\n\n${feedback}` : ""),
-        maxTokens: 16384,
-      }),
-    (text) => specLlmOutputSchema.parse(extractJson(text))
-  );
+  // Forced tool-use: syntactically valid JSON guaranteed by the API. One
+  // retry with the shape error fed back covers rare schema misses.
+  let costUsd = 0;
+  let parsed: ReturnType<typeof specLlmOutputSchema.parse>;
+  const callOnce = async (feedback?: string) => {
+    const result = await completeStructured({
+      tier: "sonnet",
+      system,
+      user: `Application spec document:\n\n${content}` + (feedback ? `\n\n${feedback}` : ""),
+      maxTokens: 16384,
+    });
+    costUsd += result.costUsd;
+    return result.value;
+  };
+  try {
+    parsed = specLlmOutputSchema.parse(await callOnce());
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    parsed = specLlmOutputSchema.parse(
+      await callOnce(`Your previous result had the wrong shape (${message}). Emit the corrected full result.`)
+    );
+  }
   const evidence: EvidenceIndex = {};
   for (const feature of parsed.features) {
     evidence[`feature:${feature.id}`] = [
