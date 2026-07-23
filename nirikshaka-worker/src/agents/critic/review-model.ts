@@ -31,7 +31,7 @@ export async function reviewModel(model: AppModelDoc): Promise<{
     tier: "sonnet",
     system,
     user: `App model to review:\n\n${JSON.stringify(model, null, 2)}`,
-    maxTokens: 4096,
+    maxTokens: 8192,
   });
   const review = modelReviewSchema.parse(extractJson(result.text));
   return { review, costUsd: result.costUsd };

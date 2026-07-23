@@ -39,7 +39,7 @@ export async function generateExplainBack(
     tier: "sonnet",
     system,
     user: JSON.stringify(projection, null, 2),
-    maxTokens: 4096,
+    maxTokens: 8192,
   });
   const output = explainOutputSchema.parse(extractJson(result.text));
   return { output, costUsd: result.costUsd };

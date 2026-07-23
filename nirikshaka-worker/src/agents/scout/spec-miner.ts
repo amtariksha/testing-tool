@@ -88,7 +88,7 @@ export async function minePrd(content: string): Promise<{
     tier: "sonnet",
     system,
     user: `Application spec document:\n\n${content}`,
-    maxTokens: 8192,
+    maxTokens: 16384,
   });
 
   const parsed = specLlmOutputSchema.parse(extractJson(result.text));

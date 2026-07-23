@@ -36,4 +36,6 @@ Rules:
   implied = 0.6-0.85, inferred = 0.3-0.6.
 - business_rules.source must point at where in the doc the rule came from.
 - Keep feature count focused on real user-facing capabilities, not UI minutiae.
-- Output the JSON object and nothing else.
+- Output the JSON object and nothing else. Emit COMPACT JSON (single line, no
+  indentation or pretty-printing) — large PRDs produce large outputs and
+  whitespace wastes the token budget.
