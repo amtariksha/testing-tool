@@ -26,6 +26,69 @@ const specLlmOutputSchema = z.object({
   entities: z.array(entitySchema).default([]),
 });
 
+// JSON Schema steering the forced emit_result tool call (shape mirror of the
+// Zod above; Zod remains the validator).
+const SPEC_TOOL_SCHEMA = {
+  type: "object",
+  required: ["features"],
+  properties: {
+    features: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "name", "confidence"],
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          confidence: { type: "number" },
+          roles: { type: "array", items: { type: "string" } },
+          screens: { type: "array", items: { type: "string" } },
+          apis: { type: "array", items: { type: "string" } },
+          states: { type: "array", items: { type: "string" } },
+          depends_on: { type: "array", items: { type: "string" } },
+          affects: { type: "array", items: { type: "string" } },
+          business_rules: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["rule", "source", "confidence"],
+              properties: {
+                rule: { type: "string" },
+                source: { type: "string" },
+                confidence: { type: "number" },
+              },
+            },
+          },
+        },
+      },
+    },
+    roles: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          description: { type: "string" },
+        },
+      },
+    },
+    entities: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id"],
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          fields: { type: "array", items: { type: "string" } },
+        },
+      },
+    },
+  },
+} as const;
+
 function slugify(name: string): string {
   return (
     name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") ||
@@ -94,16 +157,26 @@ export async function minePrd(content: string): Promise<{
       system,
       user: `Application spec document:\n\n${content}` + (feedback ? `\n\n${feedback}` : ""),
       maxTokens: 16384,
+      schema: SPEC_TOOL_SCHEMA as unknown as Record<string, unknown>,
     });
     costUsd += result.costUsd;
     return result.value;
   };
+  // A spec document ALWAYS yields features — an empty result is a failure,
+  // not a valid answer (Zod defaults would otherwise mask it silently).
+  const parseNonEmpty = (value: unknown) => {
+    const out = specLlmOutputSchema.parse(value);
+    if (out.features.length === 0) {
+      throw new Error("mined 0 features from a non-empty spec document");
+    }
+    return out;
+  };
   try {
-    parsed = specLlmOutputSchema.parse(await callOnce());
+    parsed = parseNonEmpty(await callOnce());
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    parsed = specLlmOutputSchema.parse(
-      await callOnce(`Your previous result had the wrong shape (${message}). Emit the corrected full result.`)
+    parsed = parseNonEmpty(
+      await callOnce(`Your previous result was invalid (${message}). Emit the complete corrected result with every feature from the document.`)
     );
   }
   const evidence: EvidenceIndex = {};

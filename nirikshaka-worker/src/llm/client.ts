@@ -101,7 +101,9 @@ export function extractJson<T = unknown>(text: string): T {
  * valid JSON — no fences, no unescaped-quote failures, no prose. Callers
  * still Zod-validate the shape.
  */
-export async function completeStructured(options: CompleteOptions): Promise<{
+export async function completeStructured(
+  options: CompleteOptions & { schema?: Record<string, unknown> }
+): Promise<{
   value: unknown;
   tier: ModelTier;
   costUsd: number;
@@ -124,7 +126,9 @@ export async function completeStructured(options: CompleteOptions): Promise<{
       {
         name: "emit_result",
         description: "Emit the final structured result as JSON.",
-        input_schema: { type: "object" as const },
+        // A concrete schema steers the forced call; a bare {type:"object"}
+        // invites empty/off-shape emissions.
+        input_schema: (options.schema ?? { type: "object" }) as Anthropic.Tool.InputSchema,
       },
     ],
     tool_choice: { type: "tool", name: "emit_result" },

@@ -40,6 +40,35 @@ export async function generateExplainBack(
     system,
     user: JSON.stringify(projection, null, 2),
     maxTokens: 16384,
+    schema: {
+      type: "object",
+      required: ["summaries"],
+      properties: {
+        summaries: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["featureId", "summary"],
+            properties: {
+              featureId: { type: "string" },
+              summary: { type: "string" },
+            },
+          },
+        },
+        questions: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["question"],
+            properties: {
+              question: { type: "string" },
+              featureId: { type: "string" },
+              reason: { type: "string" },
+            },
+          },
+        },
+      },
+    },
   });
   const output = explainOutputSchema.parse(result.value);
   return { output, costUsd: result.costUsd };
