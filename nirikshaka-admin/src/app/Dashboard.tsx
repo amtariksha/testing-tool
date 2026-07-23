@@ -11,6 +11,7 @@ import {
   createProject, 
   getStats,
   verifyAdminPin,
+  checkAdminSession,
   getUsers,
   updateUserRole,
   pruneTelemetryData,
@@ -137,13 +138,12 @@ export default function DashboardClient() {
 
   const [limitInput, setLimitInput] = useState<number>(100000);
 
-  // Check authentication on load
+  // Check authentication on load — the httpOnly session cookie is the truth
+  // (server actions verify it independently on every call).
   useEffect(() => {
-    const auth = sessionStorage.getItem("nirikshaka_admin_auth");
-    if (auth === "true") {
-      setIsAuthenticated(true);
-    }
-    setAuthChecking(false);
+    checkAdminSession()
+      .then((res) => setIsAuthenticated(res.authenticated))
+      .finally(() => setAuthChecking(false));
   }, []);
 
   // Fetch companies, stats, and users once authenticated
@@ -213,7 +213,6 @@ export default function DashboardClient() {
       try {
         const res = await verifyAdminPin(newPasscode);
         if (res.success) {
-          sessionStorage.setItem("nirikshaka_admin_auth", "true");
           setIsAuthenticated(true);
           setPasscode("");
         } else {
@@ -494,7 +493,7 @@ export default function DashboardClient() {
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem("nirikshaka_admin_auth");
+    // Cookie expires on its own (8h); local state reset shows the PIN screen.
     setIsAuthenticated(false);
     setPasscode("");
   };

@@ -2,16 +2,64 @@
 
 import prisma from "@/lib/prisma";
 import { Platform, UserRole } from "@prisma/client";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { cookies } from "next/headers";
+
+const SESSION_COOKIE = "admin_session";
+const SESSION_MAX_AGE_S = 8 * 60 * 60;
+
+function sessionToken(pin: string): string {
+  // Stateless session: HMAC of a fixed label under the PIN. Rotating the PIN
+  // invalidates all sessions.
+  return createHmac("sha256", pin).update("nirikshaka-admin-v1").digest("hex");
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Server-side auth for every action. The client-side PIN screen is UX only —
+ * this cookie check is the actual gate.
+ */
+async function requireAdmin(): Promise<void> {
+  const pin = process.env.ADMIN_PIN;
+  if (!pin) throw new Error("ADMIN_PIN not configured");
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  if (!token || !safeEqual(token, sessionToken(pin))) {
+    throw new Error("Unauthorized — admin session required");
+  }
+}
 
 export async function verifyAdminPin(pin: string) {
-  try {
-    const correctPin = process.env.ADMIN_PIN || "123456";
-    if (pin === correctPin) {
-      return { success: true };
-    }
+  const correctPin = process.env.ADMIN_PIN;
+  if (!correctPin) {
+    return { success: false, error: "ADMIN_PIN not configured on the server" };
+  }
+  if (!safeEqual(pin, correctPin)) {
     return { success: false, error: "Invalid passcode. Access denied." };
-  } catch (error: any) {
-    return { success: false, error: "Authentication system error" };
+  }
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE, sessionToken(correctPin), {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: SESSION_MAX_AGE_S,
+    path: "/",
+  });
+  return { success: true };
+}
+
+/** Lets the UI skip the PIN screen when a valid session cookie exists. */
+export async function checkAdminSession(): Promise<{ authenticated: boolean }> {
+  try {
+    await requireAdmin();
+    return { authenticated: true };
+  } catch {
+    return { authenticated: false };
   }
 }
 
@@ -42,6 +90,7 @@ async function getOrCreateDefaultTeam() {
 }
 
 export async function getCompanies() {
+  await requireAdmin();
   try {
     const teams = await prisma.team.findMany({
       include: {
@@ -76,6 +125,7 @@ export async function getCompanies() {
 }
 
 export async function getProjects() {
+  await requireAdmin();
   try {
     const projects = await prisma.project.findMany({
       include: {
@@ -103,6 +153,7 @@ export async function toggleFeature(
   featureKey: string,
   newValue: boolean
 ) {
+  await requireAdmin();
   try {
     // Whitelist valid flags to prevent arbitrary field updates
     const validFlags = [
@@ -134,6 +185,7 @@ export async function toggleFeature(
 }
 
 export async function updateQuota(projectId: string, monthlyEventLimit: number) {
+  await requireAdmin();
   try {
     const updatedProject = await prisma.project.update({
       where: { id: projectId },
@@ -149,6 +201,7 @@ export async function updateQuota(projectId: string, monthlyEventLimit: number) 
 }
 
 export async function toggleSuspension(projectId: string, isSuspended: boolean) {
+  await requireAdmin();
   try {
     const updatedProject = await prisma.project.update({
       where: { id: projectId },
@@ -168,6 +221,7 @@ export async function createCompany(
   ownerEmail: string,
   ownerName: string
 ) {
+  await requireAdmin();
   try {
     // 1. Find or create user
     let user = await prisma.user.findUnique({
@@ -221,6 +275,7 @@ export async function createProject(
   platform: Platform,
   monthlyEventLimit: number
 ) {
+  await requireAdmin();
   try {
     // Create the project under the company (team)
     const project = await prisma.project.create({
@@ -251,6 +306,7 @@ export async function createProject(
 }
 
 export async function getStats() {
+  await requireAdmin();
   try {
     const totalProjects = await prisma.project.count();
     const activeProjects = await prisma.project.count({ where: { status: "ACTIVE", isSuspended: false } });
@@ -283,6 +339,7 @@ export async function getStats() {
 }
 
 export async function getUsers() {
+  await requireAdmin();
   try {
     const users = await prisma.user.findMany({
       include: {
@@ -302,6 +359,7 @@ export async function getUsers() {
 }
 
 export async function updateUserRole(userId: string, newRole: UserRole) {
+  await requireAdmin();
   try {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -317,6 +375,7 @@ export async function updateUserRole(userId: string, newRole: UserRole) {
 }
 
 export async function pruneTelemetryData(days: number) {
+  await requireAdmin();
   try {
     const thresholdDate = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000);
 
@@ -357,6 +416,7 @@ export async function pruneTelemetryData(days: number) {
 }
 
 export async function manuallySetTier(projectId: string, tier: 'starter' | 'growth' | 'enterprise') {
+  await requireAdmin();
   try {
     let newLimit = 10000;
     if (tier === 'growth') {
@@ -380,6 +440,7 @@ export async function manuallySetTier(projectId: string, tier: 'starter' | 'grow
 }
 
 export async function getSystemConfig(key: string) {
+  await requireAdmin();
   try {
     const config = await prisma.systemConfig.findUnique({
       where: { key },
@@ -392,6 +453,7 @@ export async function getSystemConfig(key: string) {
 }
 
 export async function updateSystemConfig(key: string, value: string) {
+  await requireAdmin();
   try {
     const config = await prisma.systemConfig.upsert({
       where: { key },
