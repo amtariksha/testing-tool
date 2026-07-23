@@ -33,6 +33,10 @@ export default function RegisterPage() {
         setError(result.error);
         toast.error(result.error);
         setLoading(false);
+      } else if (result?.success) {
+        // Email-confirmation mode: no session yet — tell them to check mail.
+        toast.success(result.success);
+        setLoading(false);
       } else {
         toast.success("Account created! Redirecting to dashboard...");
       }

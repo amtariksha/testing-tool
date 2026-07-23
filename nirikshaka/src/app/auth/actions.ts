@@ -1,7 +1,13 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getAppUrl } from "@/lib/app-url";
 import { redirect } from "next/navigation";
+
+async function requestOrigin(): Promise<string | null> {
+  const headersList = await (await import("next/headers")).headers();
+  return headersList.get("origin");
+}
 
 export async function signIn(formData: FormData) {
   const email = formData.get("email") as string;
@@ -29,10 +35,11 @@ export async function signUp(formData: FormData) {
 
   const supabase = await createSupabaseServerClient();
 
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: `${getAppUrl(await requestOrigin())}/auth/callback?next=/dashboard`,
       data: {
         full_name: `${firstName} ${lastName}`,
         first_name: firstName,
@@ -43,6 +50,12 @@ export async function signUp(formData: FormData) {
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Email-confirmation mode: a user was created but there is no session yet.
+  // Redirecting to /dashboard here would strand an unauthenticated user.
+  if (data.user && !data.session) {
+    return { success: "Check your email to confirm your account, then sign in." };
   }
 
   redirect("/dashboard");
@@ -64,8 +77,7 @@ export async function getUser() {
 
 export async function resetPasswordForEmail(email: string) {
   const supabase = await createSupabaseServerClient();
-  const headersList = await (await import("next/headers")).headers();
-  const origin = headersList.get("origin") || "http://localhost:3001";
+  const origin = getAppUrl(await requestOrigin());
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/auth/callback?next=/reset-password`,
