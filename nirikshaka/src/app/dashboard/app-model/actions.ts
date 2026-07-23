@@ -4,6 +4,7 @@ import prisma from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { resolveUserCompany } from "@/app/dashboard/actions";
 import { getUser } from "@/app/auth/actions";
+import { requireTeamRole } from "@/lib/team-auth";
 import type { AppModelDoc, Discrepancy } from "./types";
 
 /**
@@ -62,6 +63,7 @@ async function assertAppModelInTeam(appModelId: string) {
 }
 
 export async function confirmAppModel(appModelId: string) {
+  await requireTeamRole(["OWNER", "ADMIN", "DEVELOPER"]); // VIEWERs cannot confirm
   const { appModel } = await assertAppModelInTeam(appModelId);
   if (appModel.status === "CONFIRMED") {
     return { ok: true, alreadyConfirmed: true };

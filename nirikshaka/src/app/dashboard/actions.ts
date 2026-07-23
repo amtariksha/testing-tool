@@ -19,11 +19,12 @@ export async function resolveUserCompany() {
   });
 
   if (!prismaUser) {
+    // role intentionally omitted (default DEVELOPER) — User.role now carries
+    // SUPERADMIN semantics and must not be handed out on first login.
     prismaUser = await prisma.user.create({
       data: {
         email: sbUser.email,
         name: sbUser.user_metadata?.full_name || sbUser.email.split("@")[0] || "User",
-        role: "OWNER",
       },
     });
   }

@@ -3,6 +3,7 @@
 import prisma from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { resolveUserCompany } from "@/app/dashboard/actions";
+import { requireTeamRole } from "@/lib/team-auth";
 
 /**
  * Test-cases review queue (doc §7 Phase 3). Reuses the Confirmation Gate
@@ -137,6 +138,7 @@ export async function getTestCaseQueue(projectId: string): Promise<QueueResult> 
 }
 
 export async function approveTestCase(caseId: string) {
+  await requireTeamRole(["OWNER", "ADMIN", "DEVELOPER"]); // VIEWERs cannot activate
   const testCase = await assertCaseInTeam(caseId);
   if (testCase.status !== "DRAFT") {
     throw new Error(`Only DRAFT cases can be approved (is ${testCase.status})`);
@@ -149,6 +151,7 @@ export async function approveTestCase(caseId: string) {
 }
 
 export async function bulkApproveTestCases(caseIds: string[]) {
+  await requireTeamRole(["OWNER", "ADMIN", "DEVELOPER"]); // VIEWERs cannot activate
   const projectIds = await teamProjectIds();
   // Never bulk-activate needs-human cases unless individually approved.
   const result = await prisma.testCase.updateMany({
