@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { complete, extractJson, loadPrompt } from "../../llm/client";
+import { complete, completeJsonWithRetry, extractJson, loadPrompt } from "../../llm/client";
 import {
   featureSchema,
   roleSchema,
@@ -84,14 +84,18 @@ export async function minePrd(content: string): Promise<{
   costUsd: number;
 }> {
   const system = await loadPrompt("spec-miner");
-  const result = await complete({
-    tier: "sonnet",
-    system,
-    user: `Application spec document:\n\n${content}`,
-    maxTokens: 16384,
-  });
-
-  const parsed = specLlmOutputSchema.parse(extractJson(result.text));
+  const { value: parsed, costUsd } = await completeJsonWithRetry(
+    (feedback) =>
+      complete({
+        tier: "sonnet",
+        system,
+        user:
+          `Application spec document:\n\n${content}` +
+          (feedback ? `\n\n${feedback}` : ""),
+        maxTokens: 16384,
+      }),
+    (text) => specLlmOutputSchema.parse(extractJson(text))
+  );
   const evidence: EvidenceIndex = {};
   for (const feature of parsed.features) {
     evidence[`feature:${feature.id}`] = [
@@ -105,7 +109,7 @@ export async function minePrd(content: string): Promise<{
       entities: parsed.entities,
       evidence,
     },
-    costUsd: result.costUsd,
+    costUsd,
   };
 }
 

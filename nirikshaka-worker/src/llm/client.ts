@@ -95,6 +95,32 @@ export function extractJson<T = unknown>(text: string): T {
   return JSON.parse(candidate.slice(start, end + 1)) as T;
 }
 
+/**
+ * Run an LLM call whose output must parse as JSON; on a parse/validation
+ * failure, retry ONCE with the error fed back (models occasionally emit
+ * unescaped quotes when copying source text, or truncate). `call` receives
+ * the feedback string on the retry. Costs accumulate across attempts.
+ */
+export async function completeJsonWithRetry<T>(
+  call: (feedback?: string) => Promise<CompleteResult>,
+  parse: (text: string) => T
+): Promise<{ value: T; costUsd: number }> {
+  const first = await call();
+  let costUsd = first.costUsd;
+  try {
+    return { value: parse(first.text), costUsd };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const second = await call(
+      `Your previous response was not valid JSON (${message}). ` +
+        `Output the ENTIRE corrected JSON object again — strictly valid JSON, ` +
+        `all double quotes inside string values escaped, compact single line, nothing else.`
+    );
+    costUsd += second.costUsd;
+    return { value: parse(second.text), costUsd };
+  }
+}
+
 const PROMPTS_DIR = path.join(__dirname, "prompts");
 const promptCache = new Map<string, string>();
 

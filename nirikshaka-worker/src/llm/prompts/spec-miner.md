@@ -38,4 +38,5 @@ Rules:
 - Keep feature count focused on real user-facing capabilities, not UI minutiae.
 - Output the JSON object and nothing else. Emit COMPACT JSON (single line, no
   indentation or pretty-printing) — large PRDs produce large outputs and
-  whitespace wastes the token budget.
+  whitespace wastes the token budget. Escape any double quotes inside string
+  values (\") when copying text from the document — strictly valid JSON only.

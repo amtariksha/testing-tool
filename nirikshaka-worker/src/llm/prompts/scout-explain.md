@@ -32,4 +32,6 @@ Rules:
 - Summaries: max 5 lines, each line under 100 characters, separated by \n.
 - Questions must be answerable in a sentence or two by a product owner.
 
-Output the JSON object and nothing else.
+Output the JSON object and nothing else. Emit COMPACT single-line JSON. Escape
+any double quotes inside string values (\") — the output must be strictly
+valid JSON.
