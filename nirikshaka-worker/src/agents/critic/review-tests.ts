@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { complete, extractJson, loadPrompt } from "../../llm/client";
+import { completeStructured, loadPrompt } from "../../llm/client";
 import type { AppModelDoc } from "../../schema/app-model";
 import type { TestStrategyDoc } from "../../schema/strategy";
 
@@ -50,7 +50,42 @@ export async function reviewTests(input: {
     null,
     2
   );
-  const result = await complete({ tier: "sonnet", system, user, maxTokens: 8192 });
-  const review = testReviewSchema.parse(extractJson(result.text));
+  const result = await completeStructured({
+    tier: "sonnet",
+    system,
+    user,
+    maxTokens: 8192,
+    schema: {
+      type: "object",
+      required: ["cases"],
+      properties: {
+        cases: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["externalId", "verdict"],
+            properties: {
+              externalId: { type: "string" },
+              verdict: { type: "string", enum: ["approved", "rejected", "needs_human"] },
+              findings: {
+                type: "array",
+                items: {
+                  type: "object",
+                  required: ["severity", "claim", "detail"],
+                  properties: {
+                    severity: { type: "string", enum: ["critical", "high", "medium", "low"] },
+                    claim: { type: "string" },
+                    detail: { type: "string" },
+                    suggestedFix: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const review = testReviewSchema.parse(result.value);
   return { review, costUsd: result.costUsd };
 }
