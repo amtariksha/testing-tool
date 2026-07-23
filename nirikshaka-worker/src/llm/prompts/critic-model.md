@@ -35,4 +35,13 @@ Verdict rules:
   must resolve (this is the common case for a first draft).
 - "approved": clean enough that a human review will be a formality.
 
+SPEC-ONLY CALIBRATION: when top-level `screens`, `flows`, and `apiChains` are
+ALL empty, the model was mined from documents alone (no telemetry yet) — that
+is a valid, expected mode. Do NOT treat the absence of telemetry-derived
+sections (screens/flows/apiChains, spec-vs-telemetry discrepancies) or of API
+endpoints missing from the source documents as findings, and never as
+critical ones. Judge grounding ONLY against what the provided sources could
+contain. Re-mining the same documents cannot conjure telemetry — rejecting
+for its absence just burns iterations.
+
 Be specific and terse. Output the JSON object and nothing else.
